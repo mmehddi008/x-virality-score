@@ -1,6 +1,6 @@
 # Private profiles
 
-Use Python 3 and Node for checks. No added third-party dependency.
+Use Python 3.10+ and Node for checks. No added third-party dependency.
 
 Each `profiles/<slug>/` contains `config.json`, `data.json`, `ledger.json` and `digests/`. Both config and data must declare the matching `profile_id`. Copy the existing example config/data, set the identity/date, and supply genuine collected data. Private profiles are ignored by Git; never commit credentials, drafts or browser sessions.
 
@@ -20,3 +20,13 @@ Trackpanel serves `/twitter`, `/twitter/<slug>/` and authenticated JSON through 
 No server X credentials or continuous collector are configured. Initial browser observations have timestamps and are explicitly samples. Use an authorized collection session or a separately provisioned API to update daily inputs. Publishing is manual. The score is a research coverage heuristic, not a calibrated forecast. Draft checks are syntactic; human factual review and X's final weighted-length validation remain necessary.
 
 Public GitHub Pages publishing is disabled in this private fork. Do not follow upstream instructions to upload private data.json files.
+
+## Server runtime
+
+The host's system Python 3.6 is too old. Use the isolated Python 3.12 runtime without changing system packages:
+
+```sh
+docker run --rm --network none -v /opt/insight/twitter:/app -w /app python:3.12-alpine python pipeline/run_day.py --profile o2co prepare 2026-10-26
+```
+
+The pipeline needs no network: collection happens separately. For tests use a read-only mount and `python tests/smoke.py`. The profile directories must retain their setgid permissions after uploads.
