@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(__dirname, '../board/index.html'), 'utf8'
 const script = html.split('<script>')[1].split('</script>')[0];
 new vm.Script(script);
 const els = {};
-const context = vm.createContext({ document: { getElementById(id) { return els[id] ||= {}; } } });
+const context = vm.createContext({ document: { getElementById(id) { return els[id] ||= {querySelectorAll(){return []}}; } } });
 vm.runInContext(script.slice(0, script.lastIndexOf('initTheme();')), context);
 vm.runInContext(`renderExp({totals:{trend:{n:1,median_x:'<img src=x onerror="window.auditMarker=1">'}}})`, context);
 assert(!els.exp.innerHTML.includes('<img'));
@@ -19,3 +19,12 @@ assert.equal(vm.runInContext('scoreFor(12,100000)',context),100);
 assert.equal(vm.runInContext('scoreFor(0,0)',context),0);
 console.log('PASS: JavaScript syntax and score boundaries');
 console.log('PASS: injected HTML and unsafe URL schemes blocked; profile thresholds applied');
+
+vm.runInContext(`renderProfile({profile:{name:'Example',accounts:[]},daily_research:{collected_at:'2020-01-01T00:00:00Z',summary:'<img src=x>',source_checks:{source:'sampled'},posts:[{url:'javascript:alert(1)',posted_at:'2020-01-01',views:null,summary:'Sample'}],drafts:[{title:'Draft',text:'Original text',visual:'Diagram',source_urls:[]}]}})`,context);
+assert(els.profile.innerHTML.includes('Update overdue'));
+assert(els.profile.innerHTML.includes('Unknown views'));
+assert(els.profile.innerHTML.includes('Pending approval'));
+assert(!els.profile.innerHTML.includes('<img'));
+assert(!/[\u0600-\u06ff]/.test(els.profile.innerHTML));
+assert.equal(els.analytics.hidden,true);
+console.log('PASS: English daily research, pending drafts, overdue status and unknown metrics');

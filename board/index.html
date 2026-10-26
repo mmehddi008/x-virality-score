@@ -605,7 +605,7 @@ footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:v
     </div>
   </header>
 
-  <nav style="padding:16px 0"><a href="/">← Trackpanel</a> · <a href="/twitter/">All profiles / همه پروفایل‌ها</a></nav>
+  <nav style="padding:16px 0"><a href="/">← Trackpanel</a> · <a href="/twitter/">All profiles</a></nav>
   <section id="profile" class="panel" style="padding:24px;margin-bottom:24px" aria-label="Project configuration"></section>
   <main id="analytics" hidden>
     <section class="hero" aria-label="Research coverage and day target">
@@ -690,10 +690,10 @@ footer{margin-top:52px;padding-top:22px;border-top:1px solid var(--line);color:v
 
   <footer class="reveal">
     <div class="privacy">
-      <h3>Private research / تحقیق خصوصی</h3>
+      <h3>Private research</h3>
       <ul>
         <li>Access uses your existing Trackpanel admin session. Project drafts and configuration are private.</li>
-        <li>خواندن منابع و آماده‌سازی پیش‌نویس؛ انتشار فقط با بررسی و اقدام شما.</li>
+        <li>Research and drafts only. Publishing requires your explicit approval.</li>
         <li>Observed metrics are dated samples. Coverage scores do not predict future reach.</li>
         <li>Not affiliated with X Corp. Source posts belong to their authors.</li>
       </ul>
@@ -962,16 +962,20 @@ function staggerCards(rootSel){
 }
 
 function renderProfile(d){
- const el=document.getElementById('profile');if(!el)return;const p=d.profile||{};
+ const el=document.getElementById('profile');if(!el)return;const p=d.profile||{},r=d.daily_research;
  const ready=d.collection_status==='ready';document.getElementById('analytics').hidden=!ready;
- const a=p.accounts||[];const list=x=>`<ul>${(x||[]).map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`;
+ const a=p.accounts||[],drafts=r?r.drafts:(p.starter_drafts||[]),posts=r?r.posts:(p.research_samples||[]);
+ const stale=r&&(Date.now()-Date.parse(r.collected_at)>36*3600000);
+ const list=x=>`<ul>${(x||[]).map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`;
  el.innerHTML=`<h2>${esc(p.name||d.brand_title||'Research desk')}</h2><p>${esc(p.description||'')}</p>
- <p role="status" style="padding:14px;border:1px solid var(--cyan);border-radius:8px">${ready?'Research data available. Coverage scores are heuristic, not virality probabilities.':'پروفایل آماده است؛ گردآوری کامل روزانهٔ X هنوز انجام نشده. پیش‌نویس‌های زیر پیشنهاد اولیه‌اند، نه نتیجهٔ ترند زنده. / Configured; awaiting a complete daily collection.'}</p>
- <p>Timezone: ${esc(p.timezone||d.timezone)} · Language: ${esc(p.content_language||'en')} · Hit floor: ${num(p.min_views)} · Star: ${num(p.star_views)}</p>
- <details open><summary style="font-size:18px;padding:14px 0">Initial observations / بررسی اولیه</summary><p>${esc(p.owner_baseline||'')}</p><p>نمونه‌برداری دستی در ${esc(p.research_observed_at||'—')}؛ آمار لحظهٔ مشاهده است و پوشش کامل روزانه یا رتبه‌بندی همهٔ منابع نیست.</p><div class="rgrid">${(p.research_samples||[]).map(v=>`<article class="rcard"><a href="${safeURL(v.url)}" target="_blank" rel="noopener noreferrer">${esc(v.date)} · ${num(v.views)} views</a><p>${esc(v.summary)}</p></article>`).join('')}</div></details>
- <details open><summary style="font-size:18px;padding:14px 0">Sources / منابع (${a.length})</summary><div class="rgrid">${a.map(v=>`<article class="rcard"><a href="${safeURL('https://x.com/'+v.handle)}" target="_blank" rel="noopener noreferrer">@${esc(v.handle)}</a><p>${esc(v.notes)}</p><small>${esc(v.role||'')} · <a href="${safeURL(v.source)}" target="_blank" rel="noopener noreferrer">Official source</a></small></article>`).join('')}</div><p>${esc(p.source_policy||'')}</p></details>
- <details><summary style="font-size:18px;padding:14px 0">Strategy & configuration / استراتژی و تنظیمات</summary><h3>Audience</h3><p>${esc(p.audience||'')}</p><h3>Content pillars</h3>${list(p.pillars)}<h3>Keywords</h3><div class="kw-row">${((p.x_keywords||{}).core||[]).map(k=>`<span class="kw-chip">${esc(k)}</span>`).join('')}</div><h3>Editorial rules</h3>${list(p.editorial_rules)}<h3>Initial publishing plan</h3>${list(p.publishing_plan)}<p>${esc(p.threshold_note||'')}</p></details>
- <details open><summary style="font-size:18px;padding:14px 0">Starter drafts / پیش‌نویس‌های اولیه</summary><p>Manual review and publication. No automatic posting.</p><div class="rgrid">${(p.starter_drafts||[]).map((v,i)=>`<article class="rcard"><h4>${esc(v.title)}</h4><pre class="draft-text" style="white-space:pre-wrap" id="starter-${i}">${esc(v.text)}</pre><button type="button" class="copy-btn" data-draft-id="starter-${i}">Copy draft</button><p>Visual: ${esc(v.visual)}</p></article>`).join('')}</div></details>`;
+ <p role="status" style="padding:14px;border:1px solid var(--cyan);border-radius:8px">${r?`${stale?'Update overdue. Last successful research retained.':'Daily research updated.'} Collected ${esc(r.collected_at)}. All drafts await your approval.`:'Initial configuration ready. Awaiting daily research.'}</p>
+ <p>Daily run: 09:00 Asia/Tehran · English only · Read-only collection · No automatic publication</p>
+ <details open><summary style="font-size:18px;padding:14px 0">Daily research</summary><p>${esc(r?r.summary:p.owner_baseline||'')}</p><p>Visible-post sample, not complete coverage of X. Metrics are observations at collection time; unknown values remain unknown.</p>
+ ${r?`<p>Source coverage: ${Object.entries(r.source_checks).map(([k,v])=>`@${esc(k)}: ${esc(v)}`).join(' · ')}</p>`:''}
+ <div class="rgrid">${posts.map(v=>`<article class="rcard"><a href="${safeURL(v.url)}" target="_blank" rel="noopener noreferrer">${esc((v.posted_at||v.date||'').slice(0,10))} · ${v.views==null?'Unknown':num(v.views)} views</a><p>${esc(v.summary)}</p></article>`).join('')}</div></details>
+ <details><summary style="font-size:18px;padding:14px 0">Sources (${a.length})</summary><div class="rgrid">${a.map(v=>`<article class="rcard"><a href="${safeURL('https://x.com/'+v.handle)}" target="_blank" rel="noopener noreferrer">@${esc(v.handle)}</a><p>${esc(v.notes)}</p><small>${esc(v.role||'')} · <a href="${safeURL(v.source)}" target="_blank" rel="noopener noreferrer">Official source</a></small></article>`).join('')}</div><p>${esc(p.source_policy||'')}</p></details>
+ <details><summary style="font-size:18px;padding:14px 0">Strategy & configuration</summary><h3>Audience</h3><p>${esc(p.audience||'')}</p><h3>Content pillars</h3>${list(p.pillars)}<h3>Keywords</h3>${list((p.x_keywords||{}).core)}<h3>Editorial rules</h3>${list(p.editorial_rules)}<h3>Publishing plan</h3>${list(p.publishing_plan)}<p>${esc(p.threshold_note||'')}</p></details>
+ <details open><summary style="font-size:18px;padding:14px 0">Drafts awaiting your approval</summary><p>Review, edit and approve before publishing. This workspace cannot publish to X.</p><div class="rgrid">${drafts.map((v,i)=>`<article class="rcard"><h4>${esc(v.title)}</h4><p>Pending approval</p><pre class="draft-text" style="white-space:pre-wrap" id="starter-${i}">${esc(v.text)}</pre><button type="button" class="copy-btn" data-draft-id="starter-${i}">Copy draft</button><p>Visual: ${esc(v.visual)}</p>${(v.source_urls||[]).map(u=>`<a href="${safeURL(u)}" target="_blank" rel="noopener noreferrer">Research source</a>`).join(' · ')}</article>`).join('')}</div></details>`;
  bindCopy(el);
 }
 
