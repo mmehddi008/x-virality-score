@@ -28,6 +28,7 @@ Rules:
 - The fair comparison is inside one format: video vs video, image vs image, text vs text.
 """
 from __future__ import annotations
+from storage import atomic_write
 
 import glob
 import json
@@ -86,7 +87,7 @@ def request(D):
     req = {"tool": "get_users_posts", "args": args,
            "save_as": f"{out}/timeline.json (raw; meta.next_token -> same call + pagination_token -> timeline__p2.json)",
            "budget": "1 read (+1 per extra page)"}
-    (out / "request.json").write_text(json.dumps(req, ensure_ascii=False, indent=2))
+    atomic_write((out / "request.json"), json.dumps(req, ensure_ascii=False, indent=2))
     print(json.dumps(req, ensure_ascii=False, indent=2))
 
 
@@ -182,7 +183,7 @@ def build(D):
                         "self_quote": bool("quoted" in refs and str(qauth.get(refs["quoted"])) == uid)})
             rec["views_history"][fetched] = int((p.get("public_metrics") or {}).get("impression_count") or 0)
     STORE.parent.mkdir(parents=True, exist_ok=True)
-    STORE.write_text(json.dumps(store, ensure_ascii=False, indent=1))
+    atomic_write(STORE, json.dumps(store, ensure_ascii=False, indent=1))
     now = datetime.now(timezone.utc)
     base, base_media, rows = [], {}, []
     for rec in store["posts"].values():

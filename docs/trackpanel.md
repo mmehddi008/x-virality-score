@@ -1,0 +1,22 @@
+# Private profiles
+
+Use Python 3 and Node for checks. No added third-party dependency.
+
+Each `profiles/<slug>/` contains `config.json`, `data.json`, `ledger.json` and `digests/`. Both config and data must declare the matching `profile_id`. Copy the existing example config/data, set the identity/date, and supply genuine collected data. Private profiles are ignored by Git; never commit credentials, drafts or browser sessions.
+
+```sh
+python3 pipeline/run_day.py --profile example prepare 2026-10-26
+# Complete the generated search requests and review draft/radar JSON inputs.
+python3 pipeline/run_day.py --profile example 2026-10-26
+python3 tests/smoke.py
+python3 tests/profiles.py
+node tests/renderer.cjs
+```
+
+The board date must match the run. `--skip-drafts` produces a partial result, not a completed daily run. Board publication is atomic and cooperating daily/leaderboard writers share a profile lock; auxiliary digest files are not one multi-file transaction. Direct individual pipeline commands are maintenance tools: do not run them concurrently with a daily run.
+
+Trackpanel serves `/twitter`, `/twitter/<slug>/` and authenticated JSON through its existing admin session. Profiles are directory-isolated but share the panel's admin audience; this is not multi-tenant access control. The read-only mount is `/opt/insight/twitter/profiles:/twitter/profiles:ro`; `INSIGHT_TWITTER_DIR` overrides the container path for tests/custom installs. Keep server directories root:10001 mode 2750 and files 0640 so atomic replacements inherit the panel-readable group.
+
+No server X credentials or continuous collector are configured. Initial browser observations have timestamps and are explicitly samples. Use an authorized collection session or a separately provisioned API to update daily inputs. Publishing is manual. The score is a research coverage heuristic, not a calibrated forecast. Draft checks are syntactic; human factual review and X's final weighted-length validation remain necessary.
+
+Public GitHub Pages publishing is disabled in this private fork. Do not follow upstream instructions to upload private data.json files.

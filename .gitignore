@@ -16,3 +16,7 @@ cookies.txt
 
 # Daily run data (raw X fetches, drafts, experiment history). Personal, keep local.
 digests/
+
+# Private project profiles; never publish brand research or drafts in the public fork.
+profiles/*
+!profiles/.gitkeep

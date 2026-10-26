@@ -1,3 +1,11 @@
+# Trackpanel multi-profile fork
+
+This fork adds private, isolated project workspaces and fixes unsafe shell arguments, HTML/URL rendering, fabricated-number validation, partial board writes, concurrent writers and silent upstream API failures. Start with [docs/trackpanel.md](docs/trackpanel.md); legacy upstream public-Pages instructions below do **not** apply to the Trackpanel deployment.
+
+The pipeline is provider-independent Python/JavaScript, not a Grok-only service. It processes collected JSON and agent-written drafts; it does not ship an always-on X collector or promise virality. Codex can collect through an authorized browser session and prepare inputs. Missing metrics are not successful zero results.
+
+---
+
 # Grok Bot X Virality Score
 
 Welcome. This repo is a **Grok Bot virality desk** plus a starter for **your own** public dashboard.

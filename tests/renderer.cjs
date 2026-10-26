@@ -1,0 +1,21 @@
+// Harmless renderer check: inspect generated markup without executing injected HTML.
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const html = fs.readFileSync(path.join(__dirname, '../board/index.html'), 'utf8');
+const script = html.split('<script>')[1].split('</script>')[0];
+new vm.Script(script);
+const els = {};
+const context = vm.createContext({ document: { getElementById(id) { return els[id] ||= {}; } } });
+vm.runInContext(script.slice(0, script.lastIndexOf('initTheme();')), context);
+vm.runInContext(`renderExp({totals:{trend:{n:1,median_x:'<img src=x onerror="window.auditMarker=1">'}}})`, context);
+assert(!els.exp.innerHTML.includes('<img'));
+assert.equal(vm.runInContext("safeURL('javascript:alert(1)')",context),'#');
+assert.equal(vm.runInContext("safeURL('https://u:p@example.com/')",context),'#');
+vm.runInContext('configureTargets({dashboard_targets:{minHitViews:300,starViews:1500}})',context);
+assert.equal(vm.runInContext('DASHBOARD_TARGETS.minHitViews',context),300);
+assert.equal(vm.runInContext('scoreFor(12,100000)',context),100);
+assert.equal(vm.runInContext('scoreFor(0,0)',context),0);
+console.log('PASS: JavaScript syntax and score boundaries');
+console.log('PASS: injected HTML and unsafe URL schemes blocked; profile thresholds applied');

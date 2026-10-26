@@ -19,6 +19,7 @@ last24h.posts, raw last-24h timelines in digests/<D>/_24h/*.json, and the day's 
 "extra": [names the ranker missed], "exclude": [noise].
 """
 from __future__ import annotations
+from storage import atomic_write
 
 import glob
 import json
@@ -259,7 +260,7 @@ def originals(D: str) -> dict:
     o = {r["id"]: r for r in board_top(D)}
     p = day_dir(D) / "_parts"
     p.mkdir(parents=True, exist_ok=True)
-    (p / "originals.json").write_text(json.dumps(o, ensure_ascii=False, indent=2))
+    atomic_write((p / "originals.json"), json.dumps(o, ensure_ascii=False, indent=2))
     return o
 
 
@@ -297,6 +298,8 @@ def check_one(ent, orig, trend_keys):
     kws = ent.get("keywords_used") or []
     st = overlap(draft, orig)
     errs = []
+    if len(draft) > 280:
+        errs.append("draft exceeds 280 characters")
     if not draft.strip():
         errs.append("empty draft")
     if st["g4"] > MAX_4GRAM:
@@ -318,8 +321,8 @@ def check_one(ent, orig, trend_keys):
             errs.append(f"keyword '{k}' not in trend_keywords.json")
     if len(kws) < MIN_KW and st["len_orig"] >= 12:
         errs.append(f"only {len(kws)} trend keywords (min {MIN_KW})")
-    allowed = nums(orig) | {n for k in kws for n in nums(k)}
-    extra = sorted(n for n in nums(draft) - allowed if not re.fullmatch(r"[0-9]", n.rstrip("%kmxb")))
+    allowed = nums(orig)
+    extra = sorted(nums(draft) - allowed)
     if extra:
         errs.append(f"numbers not in original: {extra}")
     if re.match(r"\s*(@|replying|great post|this!|so true|agree)", low):
@@ -410,7 +413,7 @@ def main():
         tk = rank_keywords(D)
         p = day_dir(D) / "_parts"
         p.mkdir(parents=True, exist_ok=True)
-        (p / "trend_keywords.json").write_text(json.dumps(tk, ensure_ascii=False, indent=2))
+        atomic_write((p / "trend_keywords.json"), json.dumps(tk, ensure_ascii=False, indent=2))
         print(f"{len(tk['keywords'])} keywords from {tk['n_posts']} posts -> {p / 'trend_keywords.json'}")
         print(", ".join(f"{r['rank']}.{r['keyword']}" for r in tk["keywords"]))
     elif cmd in ("top10", "originals"):

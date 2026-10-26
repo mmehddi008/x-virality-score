@@ -15,6 +15,7 @@ Format (lang ru):
 The self-quote part is omitted when 0. +K excludes trend-input-only accounts.
 """
 from __future__ import annotations
+from storage import atomic_write
 
 import sys
 
@@ -82,7 +83,7 @@ def main():
     text = "\n".join(lines)
     out = day_dir(D)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "PING.txt").write_text(text + "\n")
+    atomic_write((out / "PING.txt"), text + "\n")
     print(text)
 
 

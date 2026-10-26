@@ -14,7 +14,9 @@ import html
 import json
 import os
 import re
+from datetime import date
 from pathlib import Path
+from storage import atomic_write
 
 PIPE_DIR = Path(__file__).resolve().parent
 REPO_DIR = PIPE_DIR.parent
@@ -79,7 +81,13 @@ def thresholds(cfg: dict | None = None) -> tuple[int, int]:
 
 
 def day_dir(D: str) -> Path:
-    return ROOT / D
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', D):
+        raise ValueError('Expected date YYYY-MM-DD')
+    date.fromisoformat(D)
+    path = ROOT / D
+    if path.resolve().parent != ROOT.resolve():
+        raise ValueError('Digest path escapes profile')
+    return path
 
 
 def load_data() -> dict:
@@ -89,7 +97,11 @@ def load_data() -> dict:
 
 
 def save_data(d: dict) -> None:
-    DATA.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n")
+    cfg = load_config()
+    if cfg.get('profile_id') and d.get('profile_id') != cfg['profile_id']:
+        raise ValueError('Profile mismatch')
+    d['dashboard_targets'] = dict(cfg.get('dashboard_targets') or {}, minHitViews=thresholds(cfg)[0], starViews=thresholds(cfg)[1])
+    atomic_write(DATA, json.dumps(d, ensure_ascii=False, indent=2) + "\n")
 
 
 def clean(t: str) -> str:
@@ -111,7 +123,23 @@ def load_raw(path) -> dict:
         except Exception:
             pass
         i = s.find("{", i + 1)
-    return {}
+    raise ValueError(f'Invalid raw API response: {Path(path).name}')
+
+
+def api_posts(path):
+    obj = load_raw(path)
+    if obj.get('errors') or obj.get('error'):
+        raise ValueError(f'API error in {Path(path).name}; no metrics published')
+    posts = obj.get('data')
+    if posts is None and (obj.get('meta') or {}).get('result_count') == 0:
+        posts = []
+    if not isinstance(posts, list):
+        raise ValueError(f'Missing API data in {Path(path).name}')
+    for post in posts:
+        views = (post.get('public_metrics') or {}).get('impression_count')
+        if isinstance(views, bool) or not isinstance(views, int) or views < 0:
+            raise ValueError(f'Missing/invalid impression_count in {Path(path).name}')
+    return obj, posts
 
 
 def post_id(r: dict) -> str:

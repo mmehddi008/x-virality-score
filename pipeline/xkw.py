@@ -18,6 +18,7 @@ Candidates (config/watchlist.json "x_keywords"):
 plus the top trend keywords of D (drafts.py keywords) and optional digests/<D>/_xkw/candidates_extra.json.
 """
 from __future__ import annotations
+from storage import atomic_write
 
 import json
 import re
@@ -25,7 +26,7 @@ import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 
-from common import day_dir, load_config, load_raw
+from common import day_dir, load_config, api_posts
 
 DEFAULT_CORE = ["AI agents", "Claude Code", "ChatGPT", "OpenAI", "Anthropic", "Gemini", "Grok", "MCP", "Codex",
                 "vibe coding", "open source", "prompt injection", "AI video", "LLM", "Cursor", "second brain"]
@@ -69,7 +70,7 @@ def request(D: str, n: int | None = None):
             calls.append({"keyword": k, "window": w, "file": f"{slug(k)}__{w}.json", "tool": "search_posts_all", "args": a})
     req = {"date": D, "created": now.isoformat(), "window_start": start, "budget_calls": len(calls),
            "pace": "stay under the x MCP rate limits (e.g. <=25 calls/min); 25 posts max per call", "calls": calls}
-    (out / "request.json").write_text(json.dumps(req, ensure_ascii=False, indent=2))
+    atomic_write((out / "request.json"), json.dumps(req, ensure_ascii=False, indent=2))
     print(f"{len(calls)} search calls -> {out / 'request.json'}")
 
 
@@ -95,12 +96,11 @@ def ingest(D: str):
             query = c["args"]["query"]
             f = out / c["file"]
             if not f.exists():
-                miss = True
-                continue
-            d = load_raw(str(f))
+                raise ValueError(f"Missing search response: {f.name}")
+            d, posts = api_posts(f)
             users = {u["id"]: u.get("username") for u in (d.get("includes") or {}).get("users") or []}
             lst = []
-            for p in d.get("data") or []:
+            for p in posts:
                 v = int((p.get("public_metrics") or {}).get("impression_count") or 0)
                 h = users.get(p.get("author_id")) or "i"
                 lst.append({"views": v, "url": f"https://x.com/{h}/status/{p['id']}", "handle": "@" + h,
@@ -132,7 +132,7 @@ def ingest(D: str):
                       "Fresh posts are still gaining views, so 'up' is understated. Top-post share > 70% means one viral "
                       "post carries the keyword."),
            "keywords": ok, "missing": [r["keyword"] for r in rows if r.get("missing")]}
-    (out / "keywords.json").write_text(json.dumps(res, ensure_ascii=False, indent=2))
+    atomic_write((out / "keywords.json"), json.dumps(res, ensure_ascii=False, indent=2))
     for r in ok:
         print(f"{r['rank']:>2} {r['keyword']:<20} 24h n={r['w24']['n']:>3} total={r['w24']['total']:>11,} | "
               f"prev total={r['prev24']['total']:>11,} | {r['trend']} x{r['change']}")

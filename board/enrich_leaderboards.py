@@ -36,12 +36,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_DIR = SCRIPT_DIR.parent
+sys.path.insert(0, str(REPO_DIR / "pipeline"))
+from storage import atomic_write, writer_lock
 
 
 def _env_path(name: str, default: Path) -> Path:
@@ -278,7 +281,7 @@ def save_ledger(ledger: dict) -> None:
     ledger["tracking_start"] = TRACKING_START
     ledger["timezone"] = TZ_NAME
     ledger["threshold"] = THRESHOLD
-    LEDGER.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n")
+    atomic_write(LEDGER, json.dumps(ledger, ensure_ascii=False, indent=2) + "\n")
 
 
 def upsert_day(ledger: dict, day: str) -> None:
@@ -468,7 +471,7 @@ def patch_data_json(as_of: str, ledger: dict) -> dict:
     elif not data.get("date"):
         data["date"] = as_of
 
-    DASH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    atomic_write(DASH, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
     return data
 
 
@@ -527,4 +530,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    with writer_lock(DASH):
+        main()
