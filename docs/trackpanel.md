@@ -26,7 +26,7 @@ Public GitHub Pages publishing is disabled in this private fork. Do not follow u
 The host's system Python 3.6 is too old. Use the isolated Python 3.12 runtime without changing system packages:
 
 ```sh
-docker run --rm --network none -v /opt/insight/twitter:/app -w /app python:3.12-alpine python pipeline/run_day.py --profile o2co prepare 2026-10-26
+docker run --rm --network none -v /opt/insight/twitter:/app -w /app python:3.12-slim python pipeline/run_day.py --profile o2co prepare 2026-10-26
 ```
 
 The pipeline needs no network: collection happens separately. For tests use a read-only mount and `python tests/smoke.py`. The profile directories must retain their setgid permissions after uploads.
