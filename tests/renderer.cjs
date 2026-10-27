@@ -41,5 +41,8 @@ console.log('PASS: English daily research, pending drafts, overdue status and un
  await handlers['ai-model-formsubmit']({preventDefault(){},target:fields['ai-model-form']});
  assert.equal(saved.model,'new/model');
  assert(fields['ai-save-status'].textContent.includes('Saved.'));
- console.log('PASS: settings form loads failure status and submits the selected model');
+ setting.last_run.status='ok';fields['desk-run-status'].textContent='Update overdue';
+ await vm.runInContext('loadAISettings()',context);
+ assert.equal(fields['desk-run-status'].textContent,'Update overdue');
+ console.log('PASS: settings save, failure status and overdue status after an old successful run');
 })().catch(error=>{console.error(error);process.exitCode=1});
