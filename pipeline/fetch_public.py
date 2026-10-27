@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import time
 import urllib.request
+import urllib.error
 from datetime import datetime, timezone
 from storage import atomic_write
 
@@ -24,8 +25,19 @@ for slug in ('o2co', 'bitoff'):
         try:
             url = 'https://syndication.twitter.com/srv/timeline-profile/screen-name/'+handle
             req = urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0'})
-            with urllib.request.build_opener(NoRedirect).open(req, timeout=25) as response:
-                raw = response.read(4*1024*1024+1)
+            for attempt in range(2):
+                try:
+                    with urllib.request.build_opener(NoRedirect).open(req, timeout=25) as response:
+                        raw = response.read(4*1024*1024+1)
+                    break
+                except urllib.error.HTTPError as exc:
+                    if attempt or exc.code not in (429, 503):
+                        raise
+                    retry = exc.headers.get('Retry-After', '30')
+                    delay = int(retry) if retry.isdigit() else 30
+                    if delay > 90:
+                        raise
+                    time.sleep(max(30, delay))
             if len(raw)>4*1024*1024: raise ValueError('Response too large')
             pages[handle.lower()] = raw.decode('utf-8')
         except Exception as exc:

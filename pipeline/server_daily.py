@@ -12,7 +12,6 @@ from zoneinfo import ZoneInfo
 from daily_snapshot import apply, validate
 from run_day import profile_env
 from storage import atomic_write, writer_lock
-from editorial_fallback import prepare
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -101,14 +100,21 @@ def generate(cfg, posts, previous, feedback=''):
               'Return one JSON object with summary (string), analyses (object mapping every supplied post URL to a concise English analysis), '
               'and drafts (exactly four objects with title, text, visual, source_urls). Every source_urls list must use supplied post URLs. '
               'Each text must be original plain English, <=280 characters and contain no digits. Avoid repeats of previous drafts. '
-              'Write useful brand-appropriate educational posts; do not relabel competitor claims as brand features. '
+              'Analyze the actual supplied posts for recurring themes and distinct useful angles, then write original brand-appropriate posts. '
+              'Tie each draft to a concrete insight from its cited sources; do not substitute generic evergreen filler. '
+              'The specified brand is the author. NEVER promote a source company, its product, event or offer. '
+              'Do not mention source company names, handles, event invitations or URLs in draft text. '
+              'Use sources only to identify practical implications for the author brand audience, not advertisements to paraphrase. '
+              'Make each draft a standalone original insight, tradeoff, question or concrete technique. '
+              'Use only the trusted brand configuration for brand capabilities. Do not relabel competitor claims as brand features. '
               'Explain source coverage limits. Do not describe old posts as breaking news. No markdown fences.')
     context = {k: cfg.get(k) for k in ('name','description','audience','pillars','editorial_rules')}
     context.update(posts=posts, previous_drafts=previous, validation_feedback=feedback)
     raw = request(base+'/v1/chat/completions', {
         'model': os.environ.get('INSIGHT_AI_MODEL') or 'sonnet',
         'messages': [{'role':'system','content':system},{'role':'user','content':json.dumps(context)}],
-        'max_tokens': 4500}, key)
+        'max_tokens': 4500, 'reasoning_effort': 'low',
+        'response_format': {'type': 'json_object'}}, key)
     content = json.loads(raw)['choices'][0]['message']['content'].strip()
     if content.startswith('```'):
         content = re.sub(r'^```(?:json)?\s*|\s*```$', '', content)
@@ -123,7 +129,7 @@ def run(slug, force=False):
     cfg = json.loads(Path(paths['XVS_WATCHLIST']).read_text())
     data = json.loads(Path(paths['XVS_DATA']).read_text())
     old = data.get('daily_research', {})
-    if not force and data.get('date') == today and old.get('collection_method') == 'server_public_timeline':
+    if not force and data.get('date') == today and old.get('collection_method') == 'server_public_timeline' and old.get('generation_method') == 'ai':
         print(slug+': already updated by server today', flush=True)
         return
     posts, checks = collect(cfg, now)
@@ -132,16 +138,15 @@ def run(slug, force=False):
     for attempt in range(2):
         try:
             method = 'ai'
-            try:
-                result = generate(cfg, posts, previous, feedback)
-            except (OSError, ValueError, KeyError, TypeError):
-                result = prepare(slug, posts, previous)
-                method = 'editorial_fallback'
+            result = generate(cfg, posts, previous, feedback)
             snapshot = dict(profile_id=slug, language='en', collected_at=datetime.now(timezone.utc).isoformat(),
-                            collection_method='server_public_timeline', generation_method=method, source_checks=checks,
+                            collection_method='server_public_timeline', generation_method=method, generation_model=os.environ.get('INSIGHT_AI_MODEL', 'sonnet'), source_checks=checks,
                             summary='Public timeline sample; some sources may be unavailable. View counts are not supplied by this source. '+result['summary'],
                             posts=[dict(p, summary=result['analyses'][p['url']]) for p in posts],
                             drafts=[dict(d, approval_status='pending') for d in result['drafts']])
+            source_names = {a['handle'].lower().split('_')[0] for a in cfg['accounts']}
+            if any(re.search(r'\b'+re.escape(name)+r'\b', d['text'], re.I) for name in source_names for d in snapshot['drafts']):
+                raise ValueError('Draft must not promote or name source companies; write independent insights for the author brand')
             if any(d['text'] in previous for d in snapshot['drafts']):
                 raise ValueError('Draft repeats the previous run')
             validate(snapshot, cfg, datetime.now(timezone.utc))
@@ -150,6 +155,7 @@ def run(slug, force=False):
             return
         except (ValueError, KeyError, TypeError) as exc:
             feedback = str(exc)[:200]
+            print(slug+': draft validation retry: '+feedback, flush=True)
     raise ValueError('Generated draft validation failed after bounded retry')
 
 

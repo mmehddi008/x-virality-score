@@ -38,31 +38,30 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_PROFILE_RO
         try: s.run('one');raise AssertionError('Invalid generation accepted')
         except ValueError: pass
     assert data.read_bytes()==original
+    with patch.object(s,'collect',return_value=(posts,{'source':'sampled'})), patch.object(s,'generate',side_effect=OSError('provider unavailable')):
+        try: s.run('one');raise AssertionError('AI failure replaced by template')
+        except OSError: pass
+    assert data.read_bytes()==original
     result={'summary':'Sample only.', 'analyses':{posts[0]['url']:'Practical engineering topic.'},
             'drafts':[{'title':v,'text':v+' useful advice.','visual':'A diagram.',
                        'source_urls':[posts[0]['url']],'approval_status':'approved'} for v in ('First','Second','Third','Fourth')]}
+    promotion=copy.deepcopy(result);promotion['drafts'][0]['text']='Choose source for your next project.'
+    with patch.object(s,'collect',return_value=(posts,{'source':'sampled'})), patch.object(s,'generate',return_value=promotion):
+        try: s.run('one');raise AssertionError('Competitor promotion accepted')
+        except ValueError: pass
+    assert data.read_bytes()==original
     with patch.object(s,'collect',return_value=(posts,{'source':'sampled'})), patch.object(s,'generate',return_value=result):
         s.run('one')
     saved=json.loads(data.read_text())['daily_research']
     assert all(d['approval_status']=='pending' for d in saved['drafts'])
     with patch.object(s,'collect',side_effect=AssertionError('Duplicate collection')): s.run('one')
+    old=json.loads(data.read_text());old['daily_research']['generation_method']='editorial_fallback';data.write_text(json.dumps(old))
+    before=data.read_bytes()
+    with patch.object(s,'collect',return_value=(posts,{'source':'sampled'})), patch.object(s,'generate',side_effect=OSError('offline')) as model:
+        try: s.run('one');raise AssertionError('Template result blocked AI retry')
+        except OSError: pass
+        assert model.call_count==1 and data.read_bytes()==before
 print('PASS: source filtering, unknown metrics, last-good preservation, pending approval and daily idempotency')
-
-from editorial_fallback import prepare
-from daily_snapshot import validate
-for slug, evidence in [('o2co','Fresh web data for an agent and proxy infrastructure.'), ('bitoff','Gift card shopping with crypto.')]:
-    sample=copy.deepcopy(posts); sample[0]['text']=evidence
-    result=prepare(slug,sample,[])
-    snap=dict(profile_id=slug,language='en',collected_at=now.isoformat(),source_checks={'source':'sampled'},
-              summary=result['summary'],posts=[dict(p,summary=result['analyses'][p['url']]) for p in sample],
-              drafts=[dict(d,approval_status='pending') for d in result['drafts']])
-    validate(snap,{'profile_id':slug,'accounts':[{'handle':'source'}]},now)
-    previous=[d['text'] for d in result['drafts']]
-    assert not set(previous)&{d['text'] for d in prepare(slug,sample,previous)['drafts']}
-try:
-    prepare('o2co',[dict(posts[0],text='Unrelated football news.')],[])
-    raise AssertionError('Unrelated sources accepted')
-except ValueError: pass
 
 with tempfile.TemporaryDirectory() as tmp:
     root=Path(tmp)
@@ -76,4 +75,19 @@ with tempfile.TemporaryDirectory() as tmp:
     with patch.dict(os.environ,XVS_TIMELINES_FILE=str(output)), patch('time.sleep'):
         try: s.collect({'profile_id':'o2co','accounts':[{'handle':'source'}]},datetime.now(timezone.utc));raise AssertionError('Empty capture accepted')
         except ValueError: pass
-print('PASS: labelled relevant fallback, next-day variety, safe capture failures and source sufficiency')
+print('PASS: safe capture failures and source sufficiency')
+
+# A rate-limited source is retried once after the requested wait, never in a tight loop.
+import io
+from urllib.error import HTTPError
+with tempfile.TemporaryDirectory() as tmp:
+    root=Path(tmp)
+    for slug in ('o2co','bitoff'):
+        (root/slug).mkdir();(root/slug/'config.json').write_text(json.dumps({'accounts':[{'handle':'source'}]}))
+    responses=[HTTPError('https://syndication.twitter.com',429,'limited',{'Retry-After':'45'},None),io.BytesIO(b'fresh'),io.BytesIO(b'fresh')]
+    with patch.object(sys,'argv',['fetch_public.py',tmp,str(root/'capture.json')]), patch('urllib.request.OpenerDirector.open',side_effect=responses) as fetch, patch('time.sleep') as sleep:
+        runpy.run_path(str(Path(__file__).resolve().parents[1]/'pipeline/fetch_public.py'),run_name='__main__')
+        assert fetch.call_count==3
+        sleep.assert_any_call(45)
+    assert json.loads((root/'capture.json').read_text())['pages']['source']=='fresh'
+print('PASS: source rate limits use a bounded delayed retry')
