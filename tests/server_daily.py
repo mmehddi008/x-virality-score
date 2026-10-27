@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as tmp:
         (root/slug).mkdir(); (root/slug/'config.json').write_text(json.dumps({'accounts':[{'handle':'source'}]}))
     output=root/'capture.json'
     output.write_text('{"old":"must not reuse"}')
-    with patch.object(sys,'argv',['fetch_public.py',tmp,str(output)]), patch('urllib.request.urlopen',side_effect=OSError('offline')), patch('time.sleep'):
+    with patch.object(sys,'argv',['fetch_public.py',tmp,str(output)]), patch('urllib.request.OpenerDirector.open',side_effect=OSError('offline')), patch('time.sleep'):
         runpy.run_path(str(Path(__file__).resolve().parents[1]/'pipeline/fetch_public.py'),run_name='__main__')
     assert json.loads(output.read_text())['pages']=={'source':None}
     with patch.dict(os.environ,XVS_TIMELINES_FILE=str(output)), patch('time.sleep'):
