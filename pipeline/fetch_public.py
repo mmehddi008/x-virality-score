@@ -17,7 +17,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 root = Path(sys.argv[1])
 output = Path(sys.argv[2])
 pages = {}
-for slug in ('o2co', 'bitoff'):
+slugs = sys.argv[3:] or ['o2co', 'bitoff']
+if any(slug not in ('o2co', 'bitoff') for slug in slugs):
+    raise ValueError('Invalid profile')
+for slug in slugs:
     try:
         cfg = effective_config(slug, json.loads((root/slug/'config.json').read_text()))
     except (ValueError, OSError, KeyError, TypeError) as exc:

@@ -1,0 +1,10 @@
+[Unit]
+Description=Process private X research requests (drafts only)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=85min
+ExecStart=/usr/bin/python3 -B /opt/insight/twitter/pipeline/manual_worker.py
+ExecStopPost=/bin/sh -c "/usr/bin/docker rm -f insight-twitter-manual-o2co insight-twitter-manual-bitoff >/dev/null 2>&1 || true"

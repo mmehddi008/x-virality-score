@@ -46,3 +46,14 @@ console.log('PASS: English daily research, pending drafts, overdue status and un
  assert.equal(fields['desk-run-status'].textContent,'Update overdue');
  console.log('PASS: settings save, failure status and overdue status after an old successful run');
 })().catch(error=>{console.error(error);process.exitCode=1});
+
+(async()=>{
+ const fields={},events={};let state='queued';let method;
+ const c=vm.createContext({location:{pathname:'/twitter/o2co/'},setTimeout(){return 1},clearTimeout(){},document:{getElementById(id){return fields[id] ||= {addEventListener(e,fn){events[id+e]=fn}}}},fetch:async(u,options)=>{method=options?.method;return {ok:true,json:async()=>({status:state})}}});
+ vm.runInContext(script.slice(0,script.lastIndexOf('initTheme();')),c);
+ await vm.runInContext('loadRunControls()',c);
+ assert(fields['run-now'].disabled);assert(fields['manual-run-status'].textContent.includes('Queued'));
+ state='ok';await events['run-nowclick']();assert.equal(method,'POST');assert(!fields['run-now'].disabled);assert(!fields['run-refresh'].hidden);
+ state='failed';await events['run-nowclick']();assert(fields['run-refresh'].hidden);assert(fields['manual-run-status'].textContent.includes('retained'));
+ console.log('PASS: run request, active button, completion link and failure status');
+})().catch(error=>{console.error(error);process.exitCode=1});

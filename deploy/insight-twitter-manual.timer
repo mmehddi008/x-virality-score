@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for private X research requests
+
+[Timer]
+OnBootSec=15s
+OnUnitInactiveSec=15s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
