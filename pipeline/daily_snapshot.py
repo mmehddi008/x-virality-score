@@ -8,6 +8,7 @@ import re
 from zoneinfo import ZoneInfo
 from run_day import profile_env
 from storage import atomic_write, writer_lock
+from settings import effective_config
 
 
 def timestamp(value):
@@ -38,7 +39,7 @@ def validate(s, cfg, now):
         if not m or m[1].lower() not in allowed or checks[m[1].lower()] != 'sampled' or p['url'] in urls:
             raise ValueError('Invalid, duplicate or cross-profile source URL')
         urls.add(p['url'])
-        if not collected-timedelta(days=7) <= timestamp(p['posted_at']) <= collected:
+        if not collected-timedelta(days=cfg.get('research_days',7)) <= timestamp(p['posted_at']) <= collected:
             raise ValueError('Source post is outside the seven-day research window')
         if not isinstance(p.get('text'), str) or not 1 <= len(p['text']) <= 10000:
             raise ValueError('Missing source text')
@@ -49,8 +50,9 @@ def validate(s, cfg, now):
             if v is not None and (type(v) is not int or not 0 <= v <= 10**12):
                 raise ValueError('Unknown metrics must be null, not fabricated')
     drafts = s['drafts']
-    if len(drafts) != 4 or len({d['text'] for d in drafts}) != 4:
-        raise ValueError('Provide four distinct drafts')
+    count = cfg.get('draft_count',4)
+    if len(drafts) != count or len({d['text'] for d in drafts}) != count:
+        raise ValueError('Provide exactly '+str(count)+' distinct drafts')
     for d in drafts:
         if not all(isinstance(d.get(k), str) and d[k].strip() for k in ('title', 'text', 'visual')) or len(d['text']) > 280:
             raise ValueError('Invalid draft')
@@ -68,7 +70,7 @@ def apply(slug, snapshot, now=None):
     env = profile_env(slug)
     data_path = Path(env['XVS_DATA'])
     now = now or datetime.now(timezone.utc)
-    cfg = json.loads(Path(env['XVS_WATCHLIST']).read_text())
+    cfg = effective_config(slug, json.loads(Path(env['XVS_WATCHLIST']).read_text()))
     collected = validate(snapshot, cfg, now)
     with writer_lock(data_path):
         data = json.loads(data_path.read_text())

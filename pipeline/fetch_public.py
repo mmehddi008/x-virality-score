@@ -8,6 +8,7 @@ import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from storage import atomic_write
+from settings import effective_config
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -17,7 +18,11 @@ root = Path(sys.argv[1])
 output = Path(sys.argv[2])
 pages = {}
 for slug in ('o2co', 'bitoff'):
-    cfg = json.loads((root/slug/'config.json').read_text())
+    try:
+        cfg = effective_config(slug, json.loads((root/slug/'config.json').read_text()))
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        print(slug+': settings unavailable ('+type(exc).__name__+')', flush=True)
+        continue
     for account in cfg['accounts']:
         handle = account['handle']
         if not re.fullmatch(r'[A-Za-z0-9_]{1,15}', handle):

@@ -22,7 +22,7 @@ console.log('PASS: injected HTML and unsafe URL schemes blocked; profile thresho
 
 vm.runInContext(`renderProfile({profile:{name:'Example',accounts:[]},daily_research:{collected_at:'2020-01-01T00:00:00Z',summary:'<img src=x>',source_checks:{source:'sampled'},posts:[{url:'javascript:alert(1)',posted_at:'2020-01-01',views:null,summary:'Sample'}],drafts:[{title:'Draft',text:'Original text',visual:'Diagram',source_urls:[]}]}})`,context);
 assert(els.profile.innerHTML.includes('Update overdue'));
-assert(els.profile.innerHTML.includes('Unknown views'));
+assert(els.profile.innerHTML.includes('View counts are unavailable'));
 assert(els.profile.innerHTML.includes('Pending approval'));
 assert(!els.profile.innerHTML.includes('<img'));
 assert(!/[\u0600-\u06ff]/.test(els.profile.innerHTML));

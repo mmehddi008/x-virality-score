@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_PROFILE_RO
     with patch.object(s,'collect',side_effect=AssertionError('Duplicate collection')): s.run('one')
     changed=copy.deepcopy(result)
     for draft in changed['drafts']:draft['text']='Updated '+draft['text']
-    with patch.object(s,'profile_model',return_value='changed/model'), patch.object(s,'collect',return_value=(posts,{'source':'sampled'})) as collect, patch.object(s,'generate',return_value=changed):
+    with patch.dict(os.environ,INSIGHT_AI_MODEL='changed/model'), patch.object(s,'collect',return_value=(posts,{'source':'sampled'})) as collect, patch.object(s,'generate',return_value=changed):
         s.run('one')
         assert collect.call_count==1
     assert json.loads(data.read_text())['daily_research']['generation_model']=='changed/model'
@@ -111,3 +111,32 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_SETTINGS_R
     try:s.profile_model('one');raise AssertionError('Cross-profile setting accepted')
     except ValueError:pass
 print('PASS: independent saved models reach actual AI request; identity mismatch rejected')
+
+from settings import effective_config
+from daily_snapshot import validate
+with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ,XVS_SETTINGS_ROOT=tmp):
+    path=Path(tmp)/'one.json'
+    path.write_text(json.dumps({'profile_id':'one','model':'test/model','sources':[{'handle':'source','notes':'Engineering'}],'draft_count':2,'research_days':3}))
+    cfg=effective_config('one',{'profile_id':'one','accounts':[{'handle':'old'}]})
+    assert cfg['accounts'][0]['handle']=='source' and cfg['draft_count']==2 and cfg['research_days']==3
+    result={'profile_id':'one','language':'en','collected_at':now.isoformat(),'source_checks':{'source':'sampled'},'summary':'Sample','posts':[dict(posts[0],summary='Analysis')],'drafts':[dict(title=v,text=v+' advice.',visual='Diagram',source_urls=[posts[0]['url']],approval_status='pending') for v in ['First','Second']]}
+    validate(result,cfg,now)
+    for changes in ({'draft_count':9},{'sources':[]},{'sources':[{'handle':'../bad'}]},{'sources':[{'handle':'A'},{'handle':'a'}]}):
+        bad=json.loads(path.read_text());bad.update(changes);path.write_text(json.dumps(bad))
+        try:effective_config('one',{});raise AssertionError('Unsafe setting accepted')
+        except ValueError:pass
+print('PASS: editable sources, draft count and research window reach validation')
+
+with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_SETTINGS_ROOT=tmp):
+    from settings import shared_connection
+    path=Path(tmp)/'shared-ai.json'
+    path.write_text(json.dumps({'endpoint':'https://provider.example','api_key':'test-secret','updated_at':'today'}))
+    assert shared_connection()==('https://provider.example','test-secret','today')
+    with patch.object(s,'request',return_value=json.dumps({'choices':[{'message':{'content':'{}'}}]})) as request:
+        s.generate({'ai_model':'selected-model'},[],[])
+        assert request.call_args.args[0]=='https://provider.example/v1/chat/completions'
+        assert request.call_args.args[2]=='test-secret'
+    path.write_text('{}')
+    try: shared_connection(); raise AssertionError('Corrupt settings fell back to environment')
+    except KeyError: pass
+print('PASS central AI settings are consumed and fail closed')
