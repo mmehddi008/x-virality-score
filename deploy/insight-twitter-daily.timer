@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily English X research at nine Tehran time
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Tehran
+Persistent=true
+Unit=insight-twitter-daily.service
+
+[Install]
+WantedBy=timers.target

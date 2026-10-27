@@ -20,3 +20,5 @@ digests/
 # Private project profiles; never publish brand research or drafts in the public fork.
 profiles/*
 !profiles/.gitkeep
+public-timelines.json
+backups/
