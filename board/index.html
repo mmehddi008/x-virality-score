@@ -970,6 +970,7 @@ function renderProfile(d){
  el.innerHTML=`<h2>${esc(p.name||d.brand_title||'Research desk')}</h2><p>${esc(p.description||'')}</p>
  <p role="status" style="padding:14px;border:1px solid var(--cyan);border-radius:8px">${r?`${stale?'Update overdue. Last successful research retained.':'Daily research updated.'} Collected ${esc(r.collected_at)}. All drafts await your approval.`:'Initial configuration ready. Awaiting daily research.'}</p>
  <p>Daily run: 09:00 Asia/Tehran · English only · Read-only collection · No automatic publication</p>
+ <section id="ai-settings" aria-label="AI model settings"></section>
  <details open><summary style="font-size:18px;padding:14px 0">Daily research</summary><p>${esc(r?r.summary:p.owner_baseline||'')}</p><p>Visible-post sample, not complete coverage of X. Metrics are observations at collection time; unknown values remain unknown.</p>
  ${r?`<p>Source coverage: ${Object.entries(r.source_checks).map(([k,v])=>`@${esc(k)}: ${esc(v)}`).join(' · ')}</p>`:''}
  <div class="rgrid">${posts.map(v=>`<article class="rcard"><a href="${safeURL(v.url)}" target="_blank" rel="noopener noreferrer">${esc((v.posted_at||v.date||'').slice(0,10))} · ${v.views==null?'Unknown':num(v.views)} views</a><p>${esc(v.summary)}</p></article>`).join('')}</div></details>
@@ -979,10 +980,41 @@ function renderProfile(d){
  bindCopy(el);
 }
 
+async function loadAISettings(){
+ const root=document.getElementById('ai-settings');
+ if(!root || !location.pathname.startsWith('/twitter/'))return;
+ root.innerHTML='<p role="status">Loading AI settings…</p>';
+ try{
+  const response=await fetch('./ai-settings',{cache:'no-store'});
+  if(!response.ok)throw new Error('AI settings unavailable. Reload to try again.');
+  const settings=await response.json(),run=settings.last_run,success=settings.last_success;
+  root.innerHTML=`<h3>AI model</h3><p>${esc(settings.provider)} · Daily at 09:00 Asia/Tehran</p>
+  <form id="ai-model-form"><label for="ai-model">Model ID for this project</label><br>
+  <input id="ai-model" name="model" type="text" required maxlength="160" value="${esc(settings.model)}" style="width:min(100%,520px);padding:10px" aria-describedby="ai-model-help">
+  <p id="ai-model-help">Enter the exact model ID from your AI gateway. Saving applies to the next daily run. It does not generate or publish a post.</p>
+  <button type="submit">Save model</button> <button type="button" id="ai-reload">Reload saved settings</button>
+  <p id="ai-save-status" role="status" aria-live="polite"></p></form>
+  <p>Last run: ${esc(run?run.status:'Not recorded')}${run?' · '+esc(run.at):''}${run&&run.model?' · '+esc(run.model):''}${run&&run.error_type?' · '+esc(run.error_type):''}</p>
+  <p>Last successful model: ${esc(success&&success.model||'Not recorded')}${success?' · '+esc(success.at):''}</p>
+  <p>${settings.pending_change?'Selected model is awaiting a successful run.':'Selected model matches the last successful run.'} Model availability is confirmed only when a run succeeds. Failed runs retain previous drafts.</p>`;
+  document.getElementById('ai-reload').addEventListener('click',loadAISettings);
+  document.getElementById('ai-model-form').addEventListener('submit',async event=>{
+   event.preventDefault();const button=event.target.querySelector('button[type="submit"]'),status=document.getElementById('ai-save-status');
+   button.disabled=true;status.textContent='Saving…';
+   try{
+    const result=await fetch('./ai-settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:document.getElementById('ai-model').value.trim()})});
+    if(!result.ok)throw new Error(result.status===400?'Enter a valid model ID.':'Could not save the model. Your previous setting is unchanged.');
+    await loadAISettings();document.getElementById('ai-save-status').textContent='Saved. This project will use the selected model on its next daily run. All drafts still require your approval.';
+   }catch(error){status.textContent=error.message;button.disabled=false;}
+  });
+ }catch(error){root.innerHTML=`<p role="alert">${esc(error.message)}</p><button type="button" id="ai-retry">Reload AI settings</button>`;document.getElementById('ai-retry').addEventListener('click',loadAISettings);}
+}
+
 async function boot(){
   const res=await fetch('./data.json?ts='+Date.now());if(!res.ok)throw new Error('data.json '+res.status);const d=await res.json();
   configureTargets(d);
   renderProfile(d);
+  loadAISettings();
   resolveThemeFromData(d);
   const brand=applyBrand(d);
   const op={handle:brand.handle, name:brand.name, ...(d.operator||{})};

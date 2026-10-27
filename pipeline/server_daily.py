@@ -111,7 +111,7 @@ def generate(cfg, posts, previous, feedback=''):
     context = {k: cfg.get(k) for k in ('name','description','audience','pillars','editorial_rules')}
     context.update(posts=posts, previous_drafts=previous, validation_feedback=feedback)
     raw = request(base+'/v1/chat/completions', {
-        'model': os.environ.get('INSIGHT_AI_MODEL') or 'sonnet',
+        'model': cfg['ai_model'],
         'messages': [{'role':'system','content':system},{'role':'user','content':json.dumps(context)}],
         'max_tokens': 4500, 'reasoning_effort': 'low',
         'response_format': {'type': 'json_object'}}, key)
@@ -121,6 +121,24 @@ def generate(cfg, posts, previous, feedback=''):
     return json.loads(content)
 
 
+def profile_model(slug):
+    root = Path(os.environ.get('XVS_SETTINGS_ROOT', Path(__file__).resolve().parents[1]/'settings'))
+    path = root/(slug+'.json')
+    model = os.environ.get('INSIGHT_AI_MODEL') or 'sonnet'
+    if path.is_symlink():
+        raise ValueError('AI settings must not be a symlink')
+    if path.exists():
+        if path.stat().st_size > 4096:
+            raise ValueError('AI settings too large')
+        settings = json.loads(path.read_text())
+        if settings.get('profile_id') != slug:
+            raise ValueError('AI settings profile mismatch')
+        model = settings['model']
+    if not isinstance(model, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,159}', model):
+        raise ValueError('Invalid model ID')
+    return model
+
+
 def run(slug, force=False):
     paths = profile_env(slug)
     home = Path(paths['XVS_DATA']).parent
@@ -128,10 +146,12 @@ def run(slug, force=False):
     today = now.astimezone(ZoneInfo('Asia/Tehran')).date().isoformat()
     cfg = json.loads(Path(paths['XVS_WATCHLIST']).read_text())
     data = json.loads(Path(paths['XVS_DATA']).read_text())
+    cfg['ai_model'] = profile_model(slug)
     old = data.get('daily_research', {})
-    if not force and data.get('date') == today and old.get('collection_method') == 'server_public_timeline' and old.get('generation_method') == 'ai':
+    if not force and data.get('date') == today and old.get('collection_method') == 'server_public_timeline' and old.get('generation_method') == 'ai' and old.get('generation_model') == cfg['ai_model']:
         print(slug+': already updated by server today', flush=True)
         return
+    atomic_write(home/'server-status.json', json.dumps({'profile_id':slug,'status':'running','model':cfg['ai_model'],'at':now.isoformat()}))
     posts, checks = collect(cfg, now)
     previous = [d['text'] for d in old.get('drafts', [])]
     feedback = ''
@@ -140,7 +160,7 @@ def run(slug, force=False):
             method = 'ai'
             result = generate(cfg, posts, previous, feedback)
             snapshot = dict(profile_id=slug, language='en', collected_at=datetime.now(timezone.utc).isoformat(),
-                            collection_method='server_public_timeline', generation_method=method, generation_model=os.environ.get('INSIGHT_AI_MODEL', 'sonnet'), source_checks=checks,
+                            collection_method='server_public_timeline', generation_method=method, generation_model=cfg['ai_model'], source_checks=checks,
                             summary='Public timeline sample; some sources may be unavailable. View counts are not supplied by this source. '+result['summary'],
                             posts=[dict(p, summary=result['analyses'][p['url']]) for p in posts],
                             drafts=[dict(d, approval_status='pending') for d in result['drafts']])
@@ -151,7 +171,7 @@ def run(slug, force=False):
                 raise ValueError('Draft repeats the previous run')
             validate(snapshot, cfg, datetime.now(timezone.utc))
             print(slug+': '+apply(slug,snapshot), flush=True)
-            atomic_write(home/'server-status.json', json.dumps({'status':'ok','generation_method':method,'at':snapshot['collected_at'],'posts':len(posts),'sources':checks}))
+            atomic_write(home/'server-status.json', json.dumps({'profile_id':slug,'model':cfg['ai_model'],'status':'ok','generation_method':method,'at':snapshot['collected_at'],'posts':len(posts),'sources':checks}))
             return
         except (ValueError, KeyError, TypeError) as exc:
             feedback = str(exc)[:200]
@@ -175,5 +195,5 @@ if __name__ == '__main__':
                 failed=True
                 print(slug+': failed ('+type(exc).__name__+'); previous research retained',flush=True)
                 home=Path(profile_env(slug)['XVS_DATA']).parent
-                atomic_write(home/'server-status.json',json.dumps({'status':'failed','at':datetime.now(timezone.utc).isoformat(),'error_type':type(exc).__name__}))
+                atomic_write(home/'server-status.json',json.dumps({'profile_id':slug,'status':'failed','at':datetime.now(timezone.utc).isoformat(),'error_type':type(exc).__name__}))
     raise SystemExit(1 if failed else 0)

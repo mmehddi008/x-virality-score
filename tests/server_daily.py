@@ -55,6 +55,12 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_PROFILE_RO
     saved=json.loads(data.read_text())['daily_research']
     assert all(d['approval_status']=='pending' for d in saved['drafts'])
     with patch.object(s,'collect',side_effect=AssertionError('Duplicate collection')): s.run('one')
+    changed=copy.deepcopy(result)
+    for draft in changed['drafts']:draft['text']='Updated '+draft['text']
+    with patch.object(s,'profile_model',return_value='changed/model'), patch.object(s,'collect',return_value=(posts,{'source':'sampled'})) as collect, patch.object(s,'generate',return_value=changed):
+        s.run('one')
+        assert collect.call_count==1
+    assert json.loads(data.read_text())['daily_research']['generation_model']=='changed/model'
     old=json.loads(data.read_text());old['daily_research']['generation_method']='editorial_fallback';data.write_text(json.dumps(old))
     before=data.read_bytes()
     with patch.object(s,'collect',return_value=(posts,{'source':'sampled'})), patch.object(s,'generate',side_effect=OSError('offline')) as model:
@@ -91,3 +97,17 @@ with tempfile.TemporaryDirectory() as tmp:
         sleep.assert_any_call(45)
     assert json.loads((root/'capture.json').read_text())['pages']['source']=='fresh'
 print('PASS: source rate limits use a bounded delayed retry')
+
+with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_SETTINGS_ROOT=tmp):
+    root=Path(tmp)
+    for slug,model in [('one','provider/model-one'),('two','provider/model-two')]:
+        (root/(slug+'.json')).write_text(json.dumps({'profile_id':slug,'model':model}))
+        assert s.profile_model(slug)==model
+        cfg={'ai_model':s.profile_model(slug)}
+        with patch.object(s,'request',return_value=json.dumps({'choices':[{'message':{'content':'{}'}}]})) as request, patch.dict(os.environ,INSIGHT_AI_URL='https://example.invalid',INSIGHT_AI_KEY='test'):
+            s.generate(cfg,[],[])
+            assert request.call_args.args[1]['model']==model
+    (root/'one.json').write_text(json.dumps({'profile_id':'two','model':'wrong/model'}))
+    try:s.profile_model('one');raise AssertionError('Cross-profile setting accepted')
+    except ValueError:pass
+print('PASS: independent saved models reach actual AI request; identity mismatch rejected')

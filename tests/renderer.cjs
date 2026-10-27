@@ -28,3 +28,18 @@ assert(!els.profile.innerHTML.includes('<img'));
 assert(!/[\u0600-\u06ff]/.test(els.profile.innerHTML));
 assert.equal(els.analytics.hidden,true);
 console.log('PASS: English daily research, pending drafts, overdue status and unknown metrics');
+
+(async()=>{
+ const handlers={},fields={};let saved=null;
+ const setting={model:'a6api/gpt-6-sol',provider:'Server AI gateway',last_run:{status:'failed',at:'today',error_type:'HTTPError'},last_success:{model:'old/model',at:'yesterday'},pending_change:true};
+ context.location={pathname:'/twitter/o2co/'};
+ context.document.getElementById=id=>fields[id] ||= {value:'new/model',addEventListener(event,fn){handlers[id+event]=fn;},querySelector(){return {disabled:false}}};
+ context.fetch=async(url,options)=>{if(options&&options.method==='PUT'){saved=JSON.parse(options.body);setting.model=saved.model;}return {ok:true,json:async()=>setting}};
+ await vm.runInContext('loadAISettings()',context);
+ assert(fields['ai-settings'].innerHTML.includes('failed'));
+ assert(fields['ai-settings'].innerHTML.includes('awaiting a successful run'));
+ await handlers['ai-model-formsubmit']({preventDefault(){},target:fields['ai-model-form']});
+ assert.equal(saved.model,'new/model');
+ assert(fields['ai-save-status'].textContent.includes('Saved.'));
+ console.log('PASS: settings form loads failure status and submits the selected model');
+})().catch(error=>{console.error(error);process.exitCode=1});
