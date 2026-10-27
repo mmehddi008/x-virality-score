@@ -103,6 +103,9 @@ def generate(cfg, posts, previous, feedback=''):
               'Each text must be original plain English, <=280 characters and contain no digits. Avoid repeats of previous drafts. '
               'Analyze the actual supplied posts for recurring themes and distinct useful angles, then write original brand-appropriate posts. '
               'Tie each draft to a concrete insight from its cited sources; do not substitute generic evergreen filler. '
+              'Use the configured source guidance to select brand-relevant lessons. Ignore unrelated politics, lifestyle, stock speculation and personal chatter when drafting. '
+              'Learn creative hooks, demonstrations, comparisons and questions from creators, but never copy their wording or treat popularity as factual verification. '
+              'Keep the tone conversational and useful, not a formal corporate announcement. Related accounts do not count as independent corroboration. '
               'The specified brand is the author. NEVER promote a source company, its product, event or offer. '
               'Do not mention source company names, handles, event invitations or URLs in draft text. '
               'Use sources only to identify practical implications for the author brand audience, not advertisements to paraphrase. '
@@ -110,11 +113,11 @@ def generate(cfg, posts, previous, feedback=''):
               'Use only the trusted brand configuration for brand capabilities. Do not relabel competitor claims as brand features. '
               'Explain source coverage limits. Do not describe old posts as breaking news. No markdown fences.')
     context = {k: cfg.get(k) for k in ('name','description','audience','pillars','editorial_rules')}
-    context.update(posts=posts, previous_drafts=previous, validation_feedback=feedback)
+    context.update(posts=posts, source_guidance=[{k:a.get(k) for k in ('handle','notes')} for a in cfg.get('accounts',[])], previous_drafts=previous, validation_feedback=feedback)
     raw = request(base+'/v1/chat/completions', {
         'model': cfg['ai_model'],
         'messages': [{'role':'system','content':system},{'role':'user','content':json.dumps(context)}],
-        'max_tokens': 4500, 'reasoning_effort': 'low',
+        'max_tokens': max(4500, 1600 + 90 * len(posts)), 'reasoning_effort': 'low',
         'response_format': {'type': 'json_object'}}, key)
     content = json.loads(raw)['choices'][0]['message']['content'].strip()
     if content.startswith('```'):

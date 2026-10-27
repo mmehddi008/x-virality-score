@@ -140,3 +140,12 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_SETTINGS_R
     try: shared_connection(); raise AssertionError('Corrupt settings fell back to environment')
     except KeyError: pass
 print('PASS central AI settings are consumed and fail closed')
+
+with patch.object(s,'shared_connection',return_value=('https://example.invalid','test','revision')), patch.object(s,'request',return_value=json.dumps({'choices':[{'message':{'content':'{}'}}]})) as request:
+    cfg={'ai_model':'test/model','accounts':[{'handle':'creator','notes':'Use practical demonstrations; ignore personal chatter.'}]}
+    s.generate(cfg,[{'url':'https://x.com/creator/status/'+str(i),'text':'A useful example.'} for i in range(100)],[])
+    payload=request.call_args.args[1]
+    context=json.loads(payload['messages'][1]['content'])
+    assert payload['max_tokens']==10600 and context['source_guidance']==cfg['accounts']
+    assert 'not a formal corporate announcement' in payload['messages'][0]['content']
+print('PASS: creator guidance and sufficient bounded analysis budget for twenty sources')
