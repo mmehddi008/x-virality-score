@@ -22,3 +22,6 @@ profiles/*
 !profiles/.gitkeep
 public-timelines.json
 backups/
+
+# Per-project model choices are private deployment settings.
+settings/
