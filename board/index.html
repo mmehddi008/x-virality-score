@@ -1025,7 +1025,7 @@ async function loadAISettings(){
   const response=await fetch('./ai-settings',{cache:'no-store'});
   if(!response.ok)throw new Error('AI settings unavailable. Reload to try again.');
   const settings=await response.json(),run=settings.last_run,success=settings.last_success;
-  const indicator=document.getElementById('desk-run-status');if(indicator&&run){indicator.textContent=({ok:'Last run succeeded',running:'Research running',failed:'Last run failed · previous data retained'}[run.status]||'Run status unavailable');indicator.className='desk-badge '+(run.status==='failed'?'amber':'cyan');}
+  const indicator=document.getElementById('desk-run-status');if(indicator&&run&&(run.status!=='ok'||indicator.textContent!=='Update overdue')){indicator.textContent=({ok:'Last run succeeded',running:'Research running',failed:'Last run failed · previous data retained'}[run.status]||'Run status unavailable');indicator.className='desk-badge '+(run.status==='failed'?'amber':'cyan');}
   root.innerHTML=`<h3>AI model</h3><p><a href="/settings/ai">Shared AI connection → Endpoint &amp; API key</a></p><p>${esc(settings.provider)} · Daily at 09:00 Asia/Tehran</p>
   <form id="ai-model-form" class="desk-ai-form"><label for="ai-model">Model ID for this project</label><br>
   <input id="ai-model" name="model" type="text" required maxlength="160" value="${esc(settings.model)}" style="width:min(100%,520px);padding:10px" aria-describedby="ai-model-help">

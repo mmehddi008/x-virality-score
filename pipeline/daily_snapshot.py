@@ -40,7 +40,7 @@ def validate(s, cfg, now):
             raise ValueError('Invalid, duplicate or cross-profile source URL')
         urls.add(p['url'])
         if not collected-timedelta(days=cfg.get('research_days',7)) <= timestamp(p['posted_at']) <= collected:
-            raise ValueError('Source post is outside the seven-day research window')
+            raise ValueError('Source post is outside the configured research window')
         if not isinstance(p.get('text'), str) or not 1 <= len(p['text']) <= 10000:
             raise ValueError('Missing source text')
         if not isinstance(p.get('summary'), str) or not p['summary'].strip():
