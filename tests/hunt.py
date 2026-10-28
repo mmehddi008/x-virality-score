@@ -45,6 +45,9 @@ assert len(ok2) == 1, 'brand-config numbers must be allowed'
 assert h.clean_hashtags(['webscraping', '#WebScraping', '#bad tag', '#1x', '#AI', '#data', '#extra'], 'text') == ['#webscraping', '#AI', '#data']
 assert h.clean_hashtags(['#proxy'], 'Use a #proxy') == [] and h.clean_hashtags('x', 't') == []
 assert h.trending_hashtags([{'text': 'a #AI b #ai', 'views': 5}, {'text': '#Scraping', 'views': 9}]) == ['#scraping', '#ai']
+okb, _ = h.validate_cards([dict(card, text='Soft blocks matter.', overlay='42 countries. One credential.'), dict(card, text='Soft blocks matter.', overlay='Made up claim.'),
+                           dict(card, text='Soft blocks matter.', overlay=['x'])], xposts, [], '', {'42 countries. One credential.'})
+assert [c['overlay'] for c in okb] == ['42 countries. One credential.', '', ''], okb
 ok3, _ = h.validate_cards([dict(card, text='Soft blocks matter.', hashtags=['#webscraping', 'no good'])], xposts, [])
 assert ok3[0]['hashtags'] == ['#webscraping']
 assert 'url=https%3A%2F%2Fx.com%2Fa%2Fstatus%2F1' in h.compose_url(ok[0])

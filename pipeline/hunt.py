@@ -166,8 +166,11 @@ SYSTEM = ('You are a growth editor for the brand described in the user message. 
           'kind ("post"|"quote"|"reply"|"thread"), urgency ("now" if the wave is still rising and likely gone within hours, else "today"), '
           'ring ("core"|"adjacent"|"broad"), topic (short), why_hot (one sentence citing the supplied metrics), angle (the brand take), '
           'text (the English post, <=250 characters so hashtags still fit; for thread the first post), '
-          'visual (an image-generation prompt for a scroll-stopping image: one bold visual metaphor or scene that makes the point at a glance, '
-          'named style, colours and composition, subject centred; no text or headline in the image; never tables, dense charts, code listings or UI screenshots), '
+          'visual (an image-generation prompt for a scroll-stopping image that is unmistakably this brand, not stock art: build the scene from the '
+          'brand_kit "world" and the one brand_kit fact or tagline that fits this post, echo the brand_kit "mark" shape where natural, use the brand_kit '
+          'palette, named style and composition, subject centred, lower fifth kept calm and dark for a caption; no text, letters or logos in the image; '
+          'never tables, dense charts, code listings or UI screenshots), '
+          'overlay (the one line from brand_kit taglines or facts, copied exactly, that best supports this post; "" if none fits; it is printed on the image), '
           'source_urls (non-empty list of supplied urls; for quote/reply the first url is the post to quote/reply to), '
           'hashtags (always 2-3 hashtags to append, e.g. ["#webscraping", "#AI"]; take ones from trending_hashtags when they fit, otherwise '
           'well-established tags this audience follows on X; never brand or made-up tags; keep them out of text). '
@@ -180,6 +183,7 @@ def generate(cfg, profile, xposts, hn, post=None):
         from server_daily import request as post
     base, key, _ = shared_connection()
     context = {k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules', 'website')}
+    context['brand_kit'] = profile.get('brand_kit')
     context.update(N=cfg.get('cards', 8), x_posts=[{k: p[k] for k in ('url', 'ring', 'author', 'followers', 'views', 'likes', 'reposts', 'hours', 'velocity', 'outperformance', 'text')} for p in xposts[:40]],
                    hacker_news=hn, trending_hashtags=trending_hashtags(xposts))
     raw = post(base+'/v1/chat/completions', {'model': profile['ai_model'], 'response_format': {'type': 'json_object'}, 'max_tokens': 12000,
@@ -209,7 +213,7 @@ def clean_hashtags(tags, text):
     return out
 
 
-def validate_cards(cards, xposts, hn, brand_text=''):
+def validate_cards(cards, xposts, hn, brand_text='', overlays=()):
     """Returns (accepted cards, short reasons for each rejected card)."""
     urls = {p['url'] for p in xposts} | {h['url'] for h in hn} | {h['discussion'] for h in hn}
     # Brand config is trusted (e.g. "HTTP 200" in a pillar), so its numbers are allowed too.
@@ -229,7 +233,9 @@ def validate_cards(cards, xposts, hn, brand_text=''):
             rejected.append('%s: %s' % (str(c.get('topic', '?'))[:60] if isinstance(c, dict) else '?', exc if isinstance(exc, AssertionError) else 'missing field'))
             continue
         good.append(dict({k: c.get(k, '') for k in ('kind', 'urgency', 'ring', 'topic', 'why_hot', 'angle', 'text', 'visual', 'source_urls')},
-                         hashtags=clean_hashtags(c.get('hashtags'), c['text']), approval_status='pending'))
+                         hashtags=clean_hashtags(c.get('hashtags'), c['text']), approval_status='pending',
+                         # Printed on the image, so only exact brand lines pass; the model must not invent claims.
+                         overlay=c['overlay'] if isinstance(c.get('overlay'), str) and c['overlay'] in overlays else ''))
     return good, rejected
 
 
@@ -288,19 +294,22 @@ def run(slug, use_ai=True):
     if cfg.get('profile_id') != slug:
         raise ValueError('Hunt config profile mismatch')
     profile = effective_config(slug, json.loads(Path(paths['XVS_WATCHLIST']).read_text()))
+    kit = home/'brand.json'
+    profile['brand_kit'] = json.loads(kit.read_text()) if kit.exists() else None
     now = datetime.now(timezone.utc)
     xs = XSearch(load_providers())
     xposts = collect_x(cfg, xs, now)
     hn = collect_hn(cfg, now)
     cards, note, ai_calls, ai_tokens = [], '', 0, 0
     if use_ai:
-        brand = json.dumps({k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules')})
+        brand = json.dumps({k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules', 'brand_kit')})
+        overlays = set(((profile['brand_kit'] or {}).get('taglines') or []) + ((profile['brand_kit'] or {}).get('facts') or []))
         for attempt in range(2):  # one retry: models occasionally return cut-off or malformed JSON
             try:
                 ai_calls += 1
                 raw_cards, tokens = generate(cfg, profile, xposts, hn)
                 ai_tokens += tokens
-                cards, rejected = validate_cards(raw_cards, xposts, hn, brand)
+                cards, rejected = validate_cards(raw_cards, xposts, hn, brand, overlays)
                 note = ('%d card(s) rejected: %s' % (len(rejected), '; '.join(rejected)))[:600] if rejected else ''
                 break
             except Exception as exc:
