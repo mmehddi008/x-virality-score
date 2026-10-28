@@ -175,7 +175,7 @@ def generate(cfg, profile, xposts, hn, post=None):
     context = {k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules', 'website')}
     context.update(N=cfg.get('cards', 8), x_posts=[{k: p[k] for k in ('url', 'ring', 'author', 'followers', 'views', 'likes', 'reposts', 'hours', 'velocity', 'outperformance', 'text')} for p in xposts[:40]],
                    hacker_news=hn)
-    raw = post(base+'/v1/chat/completions', {'model': profile['ai_model'], 'response_format': {'type': 'json_object'}, 'max_tokens': 6000,
+    raw = post(base+'/v1/chat/completions', {'model': profile['ai_model'], 'response_format': {'type': 'json_object'}, 'max_tokens': 12000,
                                               'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': json.dumps(context)}]}, key)
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', json.loads(raw)['choices'][0]['message']['content'].strip())
     return json.loads(content)['cards']
@@ -263,13 +263,14 @@ def run(slug, use_ai=True):
     hn = collect_hn(cfg, now)
     cards, note = [], ''
     if use_ai:
-        try:
-            brand = json.dumps({k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules')})
-            cards, rejected = validate_cards(generate(cfg, profile, xposts, hn), xposts, hn, brand)
-            if rejected:
-                note = ('%d card(s) rejected: %s' % (len(rejected), '; '.join(rejected)))[:600]
-        except Exception as exc:
-            note = 'AI step failed (%s); ranked sources still saved' % type(exc).__name__
+        brand = json.dumps({k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules')})
+        for attempt in range(2):  # one retry: models occasionally return cut-off or malformed JSON
+            try:
+                cards, rejected = validate_cards(generate(cfg, profile, xposts, hn), xposts, hn, brand)
+                note = ('%d card(s) rejected: %s' % (len(rejected), '; '.join(rejected)))[:600] if rejected else ''
+                break
+            except Exception as exc:
+                note = 'AI step failed (%s); ranked sources still saved' % type(exc).__name__
     else:
         note = 'AI step skipped'
     for c in cards:
