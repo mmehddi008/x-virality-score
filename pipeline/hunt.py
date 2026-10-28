@@ -165,10 +165,12 @@ SYSTEM = ('You are a growth editor for the brand described in the user message. 
           'Return one JSON object {"cards": [...]} with N cards, best first (fewer only if there are not enough strong opportunities). Each card: '
           'kind ("post"|"quote"|"reply"|"thread"), urgency ("now" if the wave is still rising and likely gone within hours, else "today"), '
           'ring ("core"|"adjacent"|"broad"), topic (short), why_hot (one sentence citing the supplied metrics), angle (the brand take), '
-          'text (the English post, <=280 characters; for thread the first post), visual (a concrete image/screenshot/code idea or ""), '
+          'text (the English post, <=250 characters so hashtags still fit; for thread the first post), '
+          'visual (an image-generation prompt for a scroll-stopping image: one bold visual metaphor or scene that makes the point at a glance, '
+          'named style, colours and composition; at most a 3-6 word headline; never tables, dense charts, code listings or UI screenshots), '
           'source_urls (non-empty list of supplied urls; for quote/reply the first url is the post to quote/reply to), '
-          'hashtags (0-3 hashtags to append, e.g. ["#webscraping"]; prefer ones from trending_hashtags that fit the post, '
-          'only established tags people actually search, never brand or made-up tags; keep them out of text). '
+          'hashtags (always 2-3 hashtags to append, e.g. ["#webscraping", "#AI"]; take ones from trending_hashtags when they fit, otherwise '
+          'well-established tags this audience follows on X; never brand or made-up tags; keep them out of text). '
           'Rules: never copy wording; never invent facts, numbers, benchmarks or brand capabilities; only use numbers that appear in the sources; '
           'do not promote competitors; no hashtags inside text; no markdown fences.')
 
@@ -197,13 +199,13 @@ def trending_hashtags(xposts, limit=25):
 
 
 def clean_hashtags(tags, text):
-    """Keeps up to three well-formed, unique tags that still fit after the text; bad suggestions are dropped, not fatal."""
-    out, room = [], 280 - len(text) - 1
+    """Keeps up to three well-formed, unique tags; bad suggestions are dropped, not fatal. The panel shows the
+    length with tags and lets the admin switch tags off, so length is not checked here."""
+    out = []
     for t in tags if isinstance(tags, list) else []:
         t = '#' + str(t).lstrip('#').strip()
-        if re.fullmatch(r'#[A-Za-z][A-Za-z0-9_]{1,29}', t) and t.lower() not in {o.lower() for o in out} and t.lower() not in text.lower() and len(t)+1 <= room and len(out) < 3:
+        if re.fullmatch(r'#[A-Za-z][A-Za-z0-9_]{1,29}', t) and t.lower() not in {o.lower() for o in out} and t.lower() not in text.lower() and len(out) < 3:
             out.append(t)
-            room -= len(t)+1
     return out
 
 
