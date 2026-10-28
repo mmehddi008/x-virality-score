@@ -166,9 +166,11 @@ SYSTEM = ('You are a growth editor for the brand described in the user message. 
           'kind ("post"|"quote"|"reply"|"thread"), urgency ("now" if the wave is still rising and likely gone within hours, else "today"), '
           'ring ("core"|"adjacent"|"broad"), topic (short), why_hot (one sentence citing the supplied metrics), angle (the brand take), '
           'text (the English post, <=280 characters; for thread the first post), visual (a concrete image/screenshot/code idea or ""), '
-          'source_urls (non-empty list of supplied urls; for quote/reply the first url is the post to quote/reply to). '
+          'source_urls (non-empty list of supplied urls; for quote/reply the first url is the post to quote/reply to), '
+          'hashtags (0-3 hashtags to append, e.g. ["#webscraping"]; prefer ones from trending_hashtags that fit the post, '
+          'only established tags people actually search, never brand or made-up tags; keep them out of text). '
           'Rules: never copy wording; never invent facts, numbers, benchmarks or brand capabilities; only use numbers that appear in the sources; '
-          'do not promote competitors; no hashtags spam (max one); no markdown fences.')
+          'do not promote competitors; no hashtags inside text; no markdown fences.')
 
 
 def generate(cfg, profile, xposts, hn, post=None):
@@ -177,12 +179,32 @@ def generate(cfg, profile, xposts, hn, post=None):
     base, key, _ = shared_connection()
     context = {k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules', 'website')}
     context.update(N=cfg.get('cards', 8), x_posts=[{k: p[k] for k in ('url', 'ring', 'author', 'followers', 'views', 'likes', 'reposts', 'hours', 'velocity', 'outperformance', 'text')} for p in xposts[:40]],
-                   hacker_news=hn)
+                   hacker_news=hn, trending_hashtags=trending_hashtags(xposts))
     raw = post(base+'/v1/chat/completions', {'model': profile['ai_model'], 'response_format': {'type': 'json_object'}, 'max_tokens': 12000,
                                               'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': json.dumps(context)}]}, key)
     reply = json.loads(raw)
     content = re.sub(r'^```(?:json)?\s*|\s*```$', '', reply['choices'][0]['message']['content'].strip())
     return json.loads(content)['cards'], (reply.get('usage') or {}).get('total_tokens', 0)
+
+
+def trending_hashtags(xposts, limit=25):
+    """Hashtags used in the ranked posts, weighted by views, so suggestions follow what the audience actually uses."""
+    seen = {}
+    for p in xposts:
+        for tag in set(t.lower() for t in re.findall(r'#([A-Za-z][A-Za-z0-9_]{1,29})', p['text'])):
+            seen[tag] = seen.get(tag, 0) + p['views']
+    return ['#'+t for t in sorted(seen, key=seen.get, reverse=True)[:limit]]
+
+
+def clean_hashtags(tags, text):
+    """Keeps up to three well-formed, unique tags that still fit after the text; bad suggestions are dropped, not fatal."""
+    out, room = [], 280 - len(text) - 1
+    for t in tags if isinstance(tags, list) else []:
+        t = '#' + str(t).lstrip('#').strip()
+        if re.fullmatch(r'#[A-Za-z][A-Za-z0-9_]{1,29}', t) and t.lower() not in {o.lower() for o in out} and t.lower() not in text.lower() and len(t)+1 <= room and len(out) < 3:
+            out.append(t)
+            room -= len(t)+1
+    return out
 
 
 def validate_cards(cards, xposts, hn, brand_text=''):
@@ -204,7 +226,8 @@ def validate_cards(cards, xposts, hn, brand_text=''):
         except (AssertionError, KeyError, TypeError) as exc:
             rejected.append('%s: %s' % (str(c.get('topic', '?'))[:60] if isinstance(c, dict) else '?', exc if isinstance(exc, AssertionError) else 'missing field'))
             continue
-        good.append(dict({k: c.get(k, '') for k in ('kind', 'urgency', 'ring', 'topic', 'why_hot', 'angle', 'text', 'visual', 'source_urls')}, approval_status='pending'))
+        good.append(dict({k: c.get(k, '') for k in ('kind', 'urgency', 'ring', 'topic', 'why_hot', 'angle', 'text', 'visual', 'source_urls')},
+                         hashtags=clean_hashtags(c.get('hashtags'), c['text']), approval_status='pending'))
     return good, rejected
 
 

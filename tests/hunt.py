@@ -42,6 +42,11 @@ ok, rejected = h.validate_cards([dict(card, text='Pools in 40 regions still fail
 assert len(ok) == 1 and ok[0]['approval_status'] == 'pending' and len(rejected) == 3 and 'number not in sources: 73' in rejected[0]
 ok2, _ = h.validate_cards([dict(card, text='HTTP 200 is not proof of valid data.')], xposts, [], 'Diagnose soft blocks: HTTP 200 does not guarantee valid data.')
 assert len(ok2) == 1, 'brand-config numbers must be allowed'
+assert h.clean_hashtags(['webscraping', '#WebScraping', '#bad tag', '#1x', '#AI', '#data', '#extra'], 'text') == ['#webscraping', '#AI', '#data']
+assert h.clean_hashtags(['#proxy'], 'Use a #proxy') == [] and h.clean_hashtags('x', 't') == [] and h.clean_hashtags(['#webscraping'], 'y'*270) == []
+assert h.trending_hashtags([{'text': 'a #AI b #ai', 'views': 5}, {'text': '#Scraping', 'views': 9}]) == ['#scraping', '#ai']
+ok3, _ = h.validate_cards([dict(card, text='Soft blocks matter.', hashtags=['#webscraping', 'no good'])], xposts, [])
+assert ok3[0]['hashtags'] == ['#webscraping']
 assert 'url=https%3A%2F%2Fx.com%2Fa%2Fstatus%2F1' in h.compose_url(ok[0])
 assert 'in_reply_to=1' in h.compose_url(dict(ok[0], kind='reply'))
 
