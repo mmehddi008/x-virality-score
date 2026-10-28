@@ -1,0 +1,10 @@
+[Unit]
+Description=Trend hunt every three hours, 08:00-23:00 Tehran
+
+[Timer]
+OnCalendar=*-*-* 08,11,14,17,20,23:00:00 Asia/Tehran
+Persistent=true
+Unit=insight-twitter-hunt.service
+
+[Install]
+WantedBy=timers.target

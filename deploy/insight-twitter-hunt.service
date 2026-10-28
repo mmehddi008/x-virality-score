@@ -1,0 +1,10 @@
+[Unit]
+Description=Trend hunt: fast-rising X topics and pending opportunity cards
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=30min
+ExecStart=/bin/bash /opt/insight/twitter/deploy/run-research.sh hunt

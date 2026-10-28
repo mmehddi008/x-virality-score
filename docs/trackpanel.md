@@ -72,4 +72,5 @@ Run now uses the project's saved model and research settings, forcing a fresh se
 - X keys live in `settings/hunt-keys.json` as `{"x_providers":[{"name":"main","kind":"twitterapi.io","key":"...","min_interval":0}]}` (or `XVS_X_KEYS=k1,k2`). Keys rotate in order: 401/402/403/429/5xx or a network error skip that key for the rest of the run; a 429 is retried once first. `min_interval` paces free-tier keys (~5.5s).
 - Output: `profiles/<slug>/hunt/latest.{json,html}` plus a timestamped JSON. An AI failure still saves the ranked sources. `--no-ai` skips generation.
 - Tests: `python3 tests/hunt.py`.
-- Server: the run needs network for X, HN and AI, unlike the `--network none` analysis container.
+- Panel: `/twitter/<slug>/data.json` attaches `hunt/latest.json` as `hunt`; the board shows it as the first tab, "Trending now", with Copy and Open in X.
+- Server: `deploy/run-research.sh hunt` runs it in the same hardened container on `insight_insight-net` (needs outbound HTTPS to api.twitterapi.io and hn.algolia.com) for each profile that has `hunt.json`, sharing the research lock. Install `deploy/insight-twitter-hunt.{service,timer}` (08:00-23:00 Tehran, every three hours). Put `settings/hunt-keys.json` (0640, group 10001) and `profiles/<slug>/hunt.json` on the server; neither is committed.
