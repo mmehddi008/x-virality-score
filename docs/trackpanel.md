@@ -63,3 +63,13 @@ Trackpanel `/settings/ai` manages the OpenAI-compatible base URL and write-only 
 The runner reads the shared connection on every generation request; environment credentials are a migration fallback only when the file is absent. Corrupt saved configuration fails closed. The connection revision participates in the same-day skip check. Model overrides remain per profile, and all generated drafts stay pending approval.
 
 Run now uses the project's saved model and research settings, forcing a fresh server collection. The host `insight-twitter-manual.timer` checks private requests every fifteen seconds. Scheduled and manual jobs share `deploy/run-research.sh` and a host lock; requests cannot overlap generation. GET/POST `/twitter/{profile}/run` are admin-only and POST requires same origin. Completion links refresh the dashboard; failures retain the last good research. No X write capability is added.
+
+## Trend hunt (feature/trend-hunt, local review)
+
+`pipeline/hunt.py PROFILE` searches X by topic rings instead of fixed accounts, samples Hacker News, ranks posts by view velocity and views/followers (small accounts that outperform reveal a topic or format that works), then asks the shared AI connection for pending English opportunity cards (post, quote, reply, thread; urgency now/today). Nothing is posted; cards link to X's compose intent.
+
+- Rings live in private `profiles/<slug>/hunt.json` (start from `config/hunt.example.json`). `must_match` drops posts whose own text is off topic.
+- X keys live in `settings/hunt-keys.json` as `{"x_providers":[{"name":"main","kind":"twitterapi.io","key":"...","min_interval":0}]}` (or `XVS_X_KEYS=k1,k2`). Keys rotate in order: 401/402/403/429/5xx or a network error skip that key for the rest of the run; a 429 is retried once first. `min_interval` paces free-tier keys (~5.5s).
+- Output: `profiles/<slug>/hunt/latest.{json,html}` plus a timestamped JSON. An AI failure still saves the ranked sources. `--no-ai` skips generation.
+- Tests: `python3 tests/hunt.py`.
+- Server: the run needs network for X, HN and AI, unlike the `--network none` analysis container.

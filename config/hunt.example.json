@@ -1,0 +1,32 @@
+{
+  "profile_id": "example",
+  "own_handle": "your_handle",
+  "hours": 24,
+  "pages_per_ring": 2,
+  "cards": 8,
+  "rings": [
+    {
+      "id": "core",
+      "weight": 1.3,
+      "min_faves": 30,
+      "query": "(\"web scraping\" OR webscraping OR scraper OR scrapy OR crawlee OR puppeteer OR \"headless browser\" OR \"residential proxy\" OR \"residential proxies\" OR \"rotating proxies\" OR \"datacenter proxies\" OR socks5 OR \"anti-bot\" OR captcha OR \"cloudflare turnstile\" OR \"bot detection\")",
+      "must_match": "scrap(e|er|ers|ing)\\b|scrapy|crawlee|puppeteer|headless|prox(y|ies)|socks5|anti-bot|captcha|turnstile|bot detection"
+    },
+    {
+      "id": "adjacent",
+      "weight": 1.0,
+      "min_faves": 150,
+      "query": "(\"AI agent\" OR \"browser agent\" OR \"browser use\" OR \"computer use\" OR crawler OR \"training data\" OR \"data pipeline\" OR \"open source\" OR devtools OR \"price monitoring\")"
+    },
+    {
+      "id": "broad",
+      "weight": 0.8,
+      "min_faves": 1500,
+      "query": "(OpenAI OR Anthropic OR Claude OR ChatGPT OR Gemini OR \"Google I/O\" OR outage OR \"is down\" OR GitHub OR Cloudflare)"
+    }
+  ],
+  "hn": {
+    "enabled": true,
+    "min_points": 80
+  }
+}
