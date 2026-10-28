@@ -18,7 +18,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from settings import effective_config, shared_connection
-from storage import atomic_write, writer_lock
+from storage import atomic_write, record_usage, writer_lock
+from schedule import automation
 from run_day import profile_env
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +58,7 @@ class XSearch:
 
     def __init__(self, providers, fetch=get_json, sleep=time.sleep):
         self.providers, self.fetch, self.sleep, self.dead, self.used, self.last = providers, fetch, sleep, set(), {}, {}
+        self.billed = 0  # twitterapi.io bills per returned tweet, minimum one per request
 
     def call(self, p, url):
         # min_interval paces free/trial keys (twitterapi.io free tier allows one request per ~5s).
@@ -83,6 +85,7 @@ class XSearch:
                 if not isinstance(data.get('tweets'), list):
                     raise ValueError('Provider returned no tweet list')
                 self.used[p['name']] = self.used.get(p['name'], 0) + 1
+                self.billed += max(1, len(data['tweets']))
                 return data
             except urllib.error.HTTPError as exc:
                 errors.append('%s:%s' % (p['name'], exc.code))
@@ -177,8 +180,9 @@ def generate(cfg, profile, xposts, hn, post=None):
                    hacker_news=hn)
     raw = post(base+'/v1/chat/completions', {'model': profile['ai_model'], 'response_format': {'type': 'json_object'}, 'max_tokens': 12000,
                                               'messages': [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': json.dumps(context)}]}, key)
-    content = re.sub(r'^```(?:json)?\s*|\s*```$', '', json.loads(raw)['choices'][0]['message']['content'].strip())
-    return json.loads(content)['cards']
+    reply = json.loads(raw)
+    content = re.sub(r'^```(?:json)?\s*|\s*```$', '', reply['choices'][0]['message']['content'].strip())
+    return json.loads(content)['cards'], (reply.get('usage') or {}).get('total_tokens', 0)
 
 
 def validate_cards(cards, xposts, hn, brand_text=''):
@@ -253,7 +257,9 @@ def render(result):
 def run(slug, use_ai=True):
     paths = profile_env(slug)
     home = Path(paths['XVS_DATA']).parent
-    cfg = json.loads((home/'hunt.json').read_text())
+    # The panel's automation settings win; the profile's hunt.json is the fallback.
+    panel = automation(Path(os.environ.get('XVS_SETTINGS_ROOT', ROOT/'settings')), slug).get('hunt')
+    cfg = dict(panel, profile_id=slug) if panel else json.loads((home/'hunt.json').read_text())
     if cfg.get('profile_id') != slug:
         raise ValueError('Hunt config profile mismatch')
     profile = effective_config(slug, json.loads(Path(paths['XVS_WATCHLIST']).read_text()))
@@ -261,12 +267,15 @@ def run(slug, use_ai=True):
     xs = XSearch(load_providers())
     xposts = collect_x(cfg, xs, now)
     hn = collect_hn(cfg, now)
-    cards, note = [], ''
+    cards, note, ai_calls, ai_tokens = [], '', 0, 0
     if use_ai:
         brand = json.dumps({k: profile.get(k) for k in ('name', 'description', 'audience', 'pillars', 'editorial_rules')})
         for attempt in range(2):  # one retry: models occasionally return cut-off or malformed JSON
             try:
-                cards, rejected = validate_cards(generate(cfg, profile, xposts, hn), xposts, hn, brand)
+                ai_calls += 1
+                raw_cards, tokens = generate(cfg, profile, xposts, hn)
+                ai_tokens += tokens
+                cards, rejected = validate_cards(raw_cards, xposts, hn, brand)
                 note = ('%d card(s) rejected: %s' % (len(rejected), '; '.join(rejected)))[:600] if rejected else ''
                 break
             except Exception as exc:
@@ -275,7 +284,9 @@ def run(slug, use_ai=True):
         note = 'AI step skipped'
     for c in cards:
         c['compose_url'] = compose_url(c)
-    result = dict(profile_id=slug, generated_at=now.isoformat(timespec='seconds'), providers_used=xs.used,
+    usage = dict(x_requests=sum(xs.used.values()), x_tweets=xs.billed, ai_calls=ai_calls, ai_tokens=ai_tokens)
+    record_usage(home, hunt_runs=1, **usage)
+    result = dict(profile_id=slug, generated_at=now.isoformat(timespec='seconds'), providers_used=xs.used, usage=usage,
                   providers_failed=sorted(xs.dead), cards_note=note, cards=cards, x_posts=xposts, hn=hn)
     out = home/'hunt'
     with writer_lock(out/'latest.json'):

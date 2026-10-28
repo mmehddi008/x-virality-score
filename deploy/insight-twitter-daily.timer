@@ -1,8 +1,8 @@
 [Unit]
-Description=Daily English X research at nine Tehran time
+Description=Hourly check for scheduled X research (hours set in the panel)
 
 [Timer]
-OnCalendar=*-*-* 09:00:00 Asia/Tehran
+OnCalendar=*-*-* *:00:00 Asia/Tehran
 Persistent=true
 Unit=insight-twitter-daily.service
 

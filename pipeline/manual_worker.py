@@ -9,8 +9,9 @@ from storage import atomic_write
 
 
 def consume(root, execute):
-    for slug in ('o2co', 'bitoff'):
-        path = root / 'settings' / (slug + '-run.json')
+    # <slug>-run.json queues daily research, <slug>-hunt-run.json queues a trend hunt.
+    for slug, kind in [(slug, kind) for slug in ('o2co', 'bitoff') for kind in ('research', 'hunt')]:
+        path = root / 'settings' / (slug + ('-hunt' if kind == 'hunt' else '') + '-run.json')
         if not path.exists() or path.is_symlink() or path.stat().st_size > 4096:
             continue
         try:
@@ -28,7 +29,7 @@ def consume(root, execute):
             run['status'] = 'running'
             save()
             try:
-                execute(slug)
+                execute(slug) if kind == 'research' else execute(slug, 'hunt')
                 run['status'] = 'ok'
             except Exception:
                 run.update(status='failed', error='Research or AI generation failed. Previous drafts remain available. Check the saved model, connection and sources, then retry.')
@@ -36,8 +37,9 @@ def consume(root, execute):
         save()
 
 
-def execute(slug):
-    process = subprocess.Popen(['/bin/bash', '/opt/insight/twitter/deploy/run-research.sh', slug], start_new_session=True)
+def execute(slug, kind='research'):
+    args = ['hunt', slug] if kind == 'hunt' else [slug]
+    process = subprocess.Popen(['/bin/bash', '/opt/insight/twitter/deploy/run-research.sh'] + args, start_new_session=True)
     try:
         if process.wait(timeout=2400):
             raise RuntimeError('Research failed')
@@ -46,7 +48,8 @@ def execute(slug):
         process.wait()
         raise
     finally:
-        subprocess.run(['/usr/bin/docker', 'rm', '-f', 'insight-twitter-manual-' + slug], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        name = ('insight-twitter-hunt-' if kind == 'hunt' else 'insight-twitter-manual-') + slug
+        subprocess.run(['/usr/bin/docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 

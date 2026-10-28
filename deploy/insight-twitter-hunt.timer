@@ -1,8 +1,8 @@
 [Unit]
-Description=Trend hunt every three hours, 08:00-23:00 Tehran
+Description=Hourly check for scheduled trend hunts (hours set in the panel)
 
 [Timer]
-OnCalendar=*-*-* 08,11,14,17,20,23:00:00 Asia/Tehran
+OnCalendar=*-*-* *:00:00 Asia/Tehran
 Persistent=true
 Unit=insight-twitter-hunt.service
 

@@ -20,4 +20,7 @@ with tempfile.TemporaryDirectory() as folder, patch('manual_worker.os.chown'):
     assert get('bitoff')['status']=='failed' and 'private' not in get('bitoff')['error']
     put('o2co','running');consume(root,fail)
     assert get('o2co')['status']=='failed' and 'interrupted' in get('o2co')['error']
+    (root/'settings'/'o2co-hunt-run.json').write_text(json.dumps({'profile_id':'o2co','status':'queued'}))
+    hunts=[];consume(root,lambda slug,kind='research':hunts.append((slug,kind)))
+    assert hunts==[('o2co','hunt')] and json.loads((root/'settings'/'o2co-hunt-run.json').read_text())['status']=='ok'
 print('PASS queue isolation, one execution, safe failure and interrupted recovery')

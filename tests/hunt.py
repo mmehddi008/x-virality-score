@@ -18,7 +18,7 @@ def fetch(url, headers):
     return {'tweets': []}
 xs = h.XSearch([{'name': 'a', 'key': 'a'}, {'name': 'b', 'key': 'b'}], fetch, sleep=lambda s: None)
 xs.search('q'); xs.search('q')
-assert calls == ['a', 'a', 'b', 'b'] and xs.dead == {'a'} and xs.used == {'b': 2}
+assert calls == ['a', 'a', 'b', 'b'] and xs.dead == {'a'} and xs.used == {'b': 2} and xs.billed == 2
 try:
     h.XSearch([{'name': 'a', 'key': 'a'}], fetch, sleep=lambda s: None).search('q')
     raise AssertionError('exhausted providers accepted')
@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, XVS_SETTINGS_R
         sent.update(url=url, payload=payload)
         return json.dumps({'choices': [{'message': {'content': '```json\n{"cards": [1]}\n```'}}]})
     xp = [dict(xposts[0], ring='core', author='a', followers=1, views=1, likes=1, reposts=0, hours=1, velocity=1, outperformance=1)]
-    assert h.generate({'cards': 3}, {'ai_model': 'm', 'name': 'brand'}, xp, [], post) == [1]
+    assert h.generate({'cards': 3}, {'ai_model': 'm', 'name': 'brand'}, xp, [], post) == ([1], 0)
     assert sent['url'] == 'https://ai.test/v1/chat/completions' and json.loads(sent['payload']['messages'][1]['content'])['N'] == 3
 
 page = h.render({'x': '</script><script>alert(1)</script>'})
