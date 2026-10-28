@@ -35,11 +35,13 @@ assert small['score'] < s['score'], 'outperformance must reward small accounts'
 
 xposts = [{'url': 'https://x.com/a/status/1', 'text': 'Proxy pool grew to 40 regions'}]
 card = dict(kind='quote', urgency='now', ring='core', topic='t', why_hot='w', angle='a', visual='', source_urls=['https://x.com/a/status/1'])
-ok = h.validate_cards([dict(card, text='Pools in 40 regions still fail on soft blocks.'),
+ok, rejected = h.validate_cards([dict(card, text='Pools in 40 regions still fail on soft blocks.'),
                        dict(card, text='We cut failures by 73%.'),
                        dict(card, text='x', source_urls=['https://evil.example/1']),
                        dict(card, text='y'*281)], xposts, [])
-assert len(ok) == 1 and ok[0]['approval_status'] == 'pending'
+assert len(ok) == 1 and ok[0]['approval_status'] == 'pending' and len(rejected) == 3 and 'number not in sources: 73' in rejected[0]
+ok2, _ = h.validate_cards([dict(card, text='HTTP 200 is not proof of valid data.')], xposts, [], 'Diagnose soft blocks: HTTP 200 does not guarantee valid data.')
+assert len(ok2) == 1, 'brand-config numbers must be allowed'
 assert 'url=https%3A%2F%2Fx.com%2Fa%2Fstatus%2F1' in h.compose_url(ok[0])
 assert 'in_reply_to=1' in h.compose_url(dict(ok[0], kind='reply'))
 
