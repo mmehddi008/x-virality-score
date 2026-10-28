@@ -167,7 +167,7 @@ SYSTEM = ('You are a growth editor for the brand described in the user message. 
           'ring ("core"|"adjacent"|"broad"), topic (short), why_hot (one sentence citing the supplied metrics), angle (the brand take), '
           'text (the English post, <=250 characters so hashtags still fit; for thread the first post), '
           'visual (an image-generation prompt for a scroll-stopping image: one bold visual metaphor or scene that makes the point at a glance, '
-          'named style, colours and composition; at most a 3-6 word headline; never tables, dense charts, code listings or UI screenshots), '
+          'named style, colours and composition, subject centred; no text or headline in the image; never tables, dense charts, code listings or UI screenshots), '
           'source_urls (non-empty list of supplied urls; for quote/reply the first url is the post to quote/reply to), '
           'hashtags (always 2-3 hashtags to append, e.g. ["#webscraping", "#AI"]; take ones from trending_hashtags when they fit, otherwise '
           'well-established tags this audience follows on X; never brand or made-up tags; keep them out of text). '
